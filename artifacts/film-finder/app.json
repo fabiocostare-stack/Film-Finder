@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Film Finder",
+    "slug": "film-finder",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "film-finder",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {},
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "splash": {
+      "backgroundColor": "#111116",
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

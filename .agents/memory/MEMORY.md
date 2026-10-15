@@ -1,0 +1,1 @@
+- [Orval path-parameter export collision](orval-path-parameter-collision.md) — GET path-parameter schemas can collide with generated TypeScript parameter types.

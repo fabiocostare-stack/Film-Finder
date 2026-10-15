@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: movies
+    description: Movie catalog and streaming availability
 paths:
   /healthz:
     get:
@@ -24,6 +26,179 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /movies/search:
+    get:
+      operationId: searchMovies
+      tags: [movies]
+      summary: Search the movie catalog
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 1
+        - name: region
+          in: query
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 2
+            default: IT
+      responses:
+        "200":
+          description: Matching movies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieSearchResponse"
+        "400":
+          description: Invalid search
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieErrorResponse"
+        "503":
+          description: Movie catalog is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieErrorResponse"
+  /movies/providers:
+    get:
+      operationId: listMovieProviders
+      tags: [movies]
+      summary: List streaming services in a region
+      parameters:
+        - name: region
+          in: query
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 2
+            default: IT
+      responses:
+        "200":
+          description: Streaming services
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieProviderListResponse"
+        "503":
+          description: Movie catalog is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieErrorResponse"
+  /movies/recommendations:
+    get:
+      operationId: getMovieRecommendations
+      tags: [movies]
+      summary: Recommend films based on taste, liked genres, and streaming services
+      parameters:
+        - name: region
+          in: query
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 2
+            default: IT
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 1
+        - name: genreIds
+          in: query
+          description: Comma-separated movie genre IDs inferred from liked films and the user's written taste.
+          schema:
+            type: string
+            maxLength: 200
+        - name: providerIds
+          in: query
+          description: Comma-separated streaming provider IDs selected by the user.
+          schema:
+            type: string
+            maxLength: 200
+        - name: excludeIds
+          in: query
+          description: Comma-separated movie IDs already shown, liked, or dismissed.
+          schema:
+            type: string
+            maxLength: 10000
+        - name: taste
+          in: query
+          description: Optional free-text description used as additional preference context.
+          schema:
+            type: string
+            maxLength: 500
+      responses:
+        "200":
+          description: Personalized movie recommendations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieSearchResponse"
+        "400":
+          description: Invalid recommendation parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieErrorResponse"
+        "503":
+          description: Movie catalog is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieErrorResponse"
+  /movies/availability:
+    get:
+      operationId: getMovieAvailability
+      tags: [movies]
+      summary: Get streaming availability for one movie
+      parameters:
+        - name: movieId
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: region
+          in: query
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 2
+            default: IT
+      responses:
+        "200":
+          description: Current streaming availability
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieAvailabilityResponse"
+        "400":
+          description: Invalid movie ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieErrorResponse"
+        "503":
+          description: Movie catalog is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +208,114 @@ components:
           type: string
       required:
         - status
+    Movie:
+      type: object
+      required:
+        - id
+        - title
+        - originalTitle
+        - overview
+        - posterPath
+        - backdropPath
+        - releaseDate
+        - voteAverage
+        - genreIds
+        - originalLanguage
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        originalTitle:
+          type: string
+        overview:
+          type: string
+        posterPath:
+          type: [string, "null"]
+        backdropPath:
+          type: [string, "null"]
+        releaseDate:
+          type: string
+        voteAverage:
+          type: number
+        genreIds:
+          type: array
+          items:
+            type: integer
+        originalLanguage:
+          type: string
+    MovieProvider:
+      type: object
+      required:
+        - id
+        - name
+        - logoPath
+        - displayPriority
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        logoPath:
+          type: [string, "null"]
+        displayPriority:
+          type: integer
+    MovieSearchResponse:
+      type: object
+      required:
+        - results
+        - page
+        - totalPages
+        - totalResults
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/Movie"
+        page:
+          type: integer
+        totalPages:
+          type: integer
+        totalResults:
+          type: integer
+    MovieProviderListResponse:
+      type: object
+      required:
+        - region
+        - results
+      properties:
+        region:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/MovieProvider"
+    MovieAvailabilityResponse:
+      type: object
+      required:
+        - movieId
+        - region
+        - providers
+        - link
+      properties:
+        movieId:
+          type: integer
+        region:
+          type: string
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/MovieProvider"
+        link:
+          type: [string, "null"]
+    MovieErrorResponse:
+      type: object
+      required:
+        - error
+        - code
+      properties:
+        error:
+          type: string
+        code:
+          type: string
 

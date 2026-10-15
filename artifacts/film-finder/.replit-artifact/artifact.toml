@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/"
+title = "Film Finder"
+description = "Un'app mobile in italiano che aiuta a scoprire film in base ai gusti personali e mostra su quali piattaforme streaming sono disponibili in Italia. Include catalogo ricercabile, profilo gusti, preferiti e raccomandazioni varie."
+version = "1.0.0"
+id = "artifacts/film-finder"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/" ]
+localPort = 23819
+
+[services.development]
+run = "pnpm --filter @workspace/film-finder run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/film-finder", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/film-finder", "run", "serve" ]
+
+[services.env]
+PORT = "23819"
+BASE_PATH = "/"

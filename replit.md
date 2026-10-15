@@ -1,15 +1,16 @@
-# [Project name]
+# Film Finder
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+App mobile in italiano per ricevere consigli di film basati sui propri gusti e sulle piattaforme streaming disponibili in Italia.
 
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/film-finder run dev` — run the Expo mobile app
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required secret for live movie data: `TMDB_API_KEY`
 
 ## Stack
 
@@ -22,23 +23,29 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/film-finder` — Expo app, AsyncStorage preferences, movie browsing and recommendations
+- `artifacts/api-server/src/routes/movies.ts` — TMDB catalog, streaming provider, and availability proxy
+- `lib/api-spec/openapi.yaml` — API contract and generated client schemas
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Keep profile, liked titles, selected providers, saved titles, and recommendation history on-device; no account or database is needed for this first mobile version.
+- Send TMDB requests through the API server so the TMDB key is never bundled in the mobile app.
+- Do not show sample films when the live catalog is unavailable.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Search a large movie catalog, like films, keep a watchlist, describe viewing preferences, select Italian streaming providers, and see verified availability for each film.
+- Recommendations use liked-film genres, free-text taste keywords, selected providers, and a persistent exclusion history to rotate suggestions.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- The interface and user-facing copy should be in Italian.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Live catalog and streaming data return an explicit configuration message until the `TMDB_API_KEY` secret is set.
+- Re-run API code generation after changing `lib/api-spec/openapi.yaml`.
 
 ## Pointers
 
