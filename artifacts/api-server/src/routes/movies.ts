@@ -340,7 +340,7 @@ router.get("/movies/recommendations", async (req, res): Promise<void> => {
     sort_by: sortBy,
     page: pageNumber,
   };
-  if (genres.length > 0) params.with_genres = genres.join(",");
+  if (genres.length > 0) params.with_genres = genres.join("|");
   if (providers.length > 0) {
     params.with_watch_providers = providers.join("|");
     params.with_watch_monetization_types = "flatrate|free|ads";
@@ -349,14 +349,43 @@ router.get("/movies/recommendations", async (req, res): Promise<void> => {
   if (sortBy === "vote_average.desc") params["vote_count.gte"] = 50;
 
   try {
-    const payload = await getTmdb<TmdbList<TmdbMovie>>(
-      "/discover/movie",
-      params,
-      3 * 60 * 1000,
-    );
+    const results: Movie[] = [];
+    const resultIds = new Set<number>();
+    let totalPages = 0;
+    let totalResults = 0;
+    const lastPageToScan = Math.min(500, pageNumber + 2);
+
+    for (
+      let scanPage = pageNumber;
+      scanPage <= lastPageToScan && results.length < 20;
+      scanPage += 1
+    ) {
+      const payload = await getTmdb<TmdbList<TmdbMovie>>(
+        "/discover/movie",
+        { ...params, page: scanPage },
+        3 * 60 * 1000,
+      );
+      const pageResults = parseListResponse(payload, excludeIds);
+      totalPages = pageResults.totalPages;
+      totalResults = pageResults.totalResults;
+
+      for (const movie of pageResults.results) {
+        if (resultIds.has(movie.id)) continue;
+        resultIds.add(movie.id);
+        results.push(movie);
+      }
+
+      if (scanPage >= totalPages) break;
+    }
+
     res.json(
       GetMovieRecommendationsResponse.parse(
-        parseListResponse(payload, excludeIds),
+        {
+          results: results.slice(0, 20),
+          page: pageNumber,
+          totalPages,
+          totalResults,
+        },
       ),
     );
   } catch (error) {

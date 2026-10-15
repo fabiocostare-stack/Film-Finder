@@ -316,7 +316,7 @@ export const getGetMovieRecommendationsUrl = (params?: GetMovieRecommendationsPa
 }
 
 /**
- * @summary Recommend films based on taste, liked genres, and streaming services
+ * @summary Recommend films based on taste, watched genres, and streaming services
  */
 export const getMovieRecommendations = async (params?: GetMovieRecommendationsParams, options?: Parameters<typeof customFetch>[1]): Promise<MovieSearchResponse> => {
 
@@ -363,7 +363,7 @@ export type GetMovieRecommendationsQueryError = ErrorType<MovieErrorResponse>
 
 
 /**
- * @summary Recommend films based on taste, liked genres, and streaming services
+ * @summary Recommend films based on taste, watched genres, and streaming services
  */
 
 export function useGetMovieRecommendations<TData = Awaited<ReturnType<typeof getMovieRecommendations>>, TError = ErrorType<MovieErrorResponse>>(

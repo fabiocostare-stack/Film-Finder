@@ -81,7 +81,7 @@ export const ListMovieProvidersResponse = zod.object({
 
 
 /**
- * @summary Recommend films based on taste, liked genres, and streaming services
+ * @summary Recommend films based on taste, watched genres, and streaming services
  */
 export const getMovieRecommendationsQueryRegionDefault = `IT`;
 export const getMovieRecommendationsQueryRegionMin = 2;
@@ -103,7 +103,7 @@ export const getMovieRecommendationsQueryTasteMax = 500;
 export const GetMovieRecommendationsQueryParams = zod.object({
   "region": zod.coerce.string().min(getMovieRecommendationsQueryRegionMin).max(getMovieRecommendationsQueryRegionMax).default(getMovieRecommendationsQueryRegionDefault),
   "page": zod.coerce.number().int().min(1).max(getMovieRecommendationsQueryPageMax).default(getMovieRecommendationsQueryPageDefault),
-  "genreIds": zod.coerce.string().max(getMovieRecommendationsQueryGenreIdsMax).optional().describe('Comma-separated movie genre IDs inferred from liked films and the user\'s written taste.'),
+  "genreIds": zod.coerce.string().max(getMovieRecommendationsQueryGenreIdsMax).optional().describe('Comma-separated movie genre IDs inferred from watched films and the user\'s written taste. Matching uses any listed genre.'),
   "providerIds": zod.coerce.string().max(getMovieRecommendationsQueryProviderIdsMax).optional().describe('Comma-separated streaming provider IDs selected by the user.'),
   "excludeIds": zod.coerce.string().max(getMovieRecommendationsQueryExcludeIdsMax).optional().describe('Comma-separated movie IDs already shown, liked, or dismissed.'),
   "taste": zod.coerce.string().max(getMovieRecommendationsQueryTasteMax).optional().describe('Optional free-text description used as additional preference context.')

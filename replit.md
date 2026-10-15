@@ -29,14 +29,14 @@ App mobile in italiano per ricevere consigli di film basati sui propri gusti e s
 
 ## Architecture decisions
 
-- Keep profile, liked titles, selected providers, saved titles, and recommendation history on-device; no account or database is needed for this first mobile version.
+- Keep watched titles, selected providers, saved titles, and recommendation history on-device; no account or database is needed for this first mobile version.
 - Send TMDB requests through the API server so the TMDB key is never bundled in the mobile app.
 - Do not show sample films when the live catalog is unavailable.
 
 ## Product
 
-- Search a large movie catalog, like films, keep a watchlist, describe viewing preferences, select Italian streaming providers, and see verified availability for each film.
-- Recommendations use liked-film genres, free-text taste keywords, selected providers, and a persistent exclusion history to rotate suggestions.
+- Search a large movie catalog, mark films as watched, keep a watchlist, describe viewing preferences, select Italian streaming providers, and see verified availability for each film.
+- Recommendations use watched-film genres, free-text taste keywords, selected providers, and a persistent exclusion history to rotate suggestions.
 
 ## User preferences
 

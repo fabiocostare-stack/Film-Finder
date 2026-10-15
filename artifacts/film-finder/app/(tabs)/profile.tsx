@@ -201,7 +201,7 @@ export default function ProfileScreen() {
           </Text>
         </View>
         <Text style={[styles.historyCount, { color: colors.primary }]}>
-          {preferences.seenMovieIds.length}
+          {preferences.shownMovieIds.length}
         </Text>
         <Pressable
           testID="clear-recommendation-history"

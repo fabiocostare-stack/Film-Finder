@@ -18,7 +18,7 @@ region?: string;
  */
 page?: number;
 /**
- * Comma-separated movie genre IDs inferred from liked films and the user's written taste.
+ * Comma-separated movie genre IDs inferred from watched films and the user's written taste. Matching uses any listed genre.
  * @maxLength 200
  */
 genreIds?: string;

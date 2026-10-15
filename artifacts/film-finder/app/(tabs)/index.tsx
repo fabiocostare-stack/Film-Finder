@@ -27,8 +27,8 @@ export default function HomeScreen() {
   const {
     preferences,
     isReady,
-    markSeen,
-    toggleLikedMovie,
+    markShown,
+    toggleWatchedMovie,
     toggleSavedMovie,
     dismissMovie,
     clearRecommendationHistory,
@@ -38,16 +38,16 @@ export default function HomeScreen() {
   const excludedIds = useMemo(
     () =>
       [
-        ...preferences.seenMovieIds,
+        ...preferences.shownMovieIds,
         ...preferences.dismissedMovieIds,
-        ...preferences.likedMovies.map((movie) => movie.id),
+        ...preferences.watchedMovies.map((movie) => movie.id),
       ]
         .slice(-900)
         .join(","),
     [
       preferences.dismissedMovieIds,
-      preferences.likedMovies,
-      preferences.seenMovieIds,
+      preferences.watchedMovies,
+      preferences.shownMovieIds,
     ],
   );
   const queryParams = useMemo<GetMovieRecommendationsParams>(
@@ -58,7 +58,7 @@ export default function HomeScreen() {
         preferences.selectedProviders.length > 0
           ? preferences.selectedProviders.map((provider) => provider.id).join(",")
           : undefined,
-      genreIds: [...new Set(preferences.likedMovies.flatMap((movie) => movie.genreIds))]
+      genreIds: [...new Set(preferences.watchedMovies.flatMap((movie) => movie.genreIds))]
         .slice(0, 12)
         .join(",") || undefined,
       excludeIds: excludedIds || undefined,
@@ -67,7 +67,7 @@ export default function HomeScreen() {
     [
       excludedIds,
       page,
-      preferences.likedMovies,
+      preferences.watchedMovies,
       preferences.selectedProviders,
       preferences.taste,
     ],
@@ -77,13 +77,13 @@ export default function HomeScreen() {
       "movie-recommendations",
       page,
       preferences.selectedProviders.map((provider) => provider.id).join(","),
-      preferences.likedMovies.map((movie) => movie.id).join(","),
+      preferences.watchedMovies.map((movie) => movie.id).join(","),
       preferences.taste,
       preferences.historyRevision,
     ],
     [
       page,
-      preferences.likedMovies,
+      preferences.watchedMovies,
       preferences.selectedProviders,
       preferences.taste,
       preferences.historyRevision,
@@ -101,8 +101,8 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const ids = recommendations.data?.results.map((movie) => movie.id) ?? [];
-    if (ids.length > 0) markSeen(ids);
-  }, [markSeen, recommendations.data?.results]);
+    if (ids.length > 0) markShown(ids);
+  }, [markShown, recommendations.data?.results]);
 
   const movieCount = recommendations.data?.results.length ?? 0;
   const paddingTop = Platform.OS === "web" ? 67 : insets.top + 10;
@@ -174,7 +174,7 @@ export default function HomeScreen() {
           disabled={recommendations.isFetching}
           onPress={() => {
             if (movieCount > 0) {
-              markSeen(recommendations.data?.results.map((movie) => movie.id) ?? []);
+              markShown(recommendations.data?.results.map((movie) => movie.id) ?? []);
             }
             setPage((current) =>
               recommendations.data?.totalPages &&
@@ -216,10 +216,10 @@ export default function HomeScreen() {
         <View style={[styles.emptyPanel, { borderColor: colors.border }]}>
           <Feather name="film" size={24} color={colors.primary} />
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-            Hai visto tutti questi titoli
+            Nessun titolo nuovo in questo gruppo
           </Text>
           <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
-            Puoi continuare con un altro gruppo o azzerare la cronologia dei consigli.
+            I film già mostrati o segnati come visti sono esclusi. Prova un altro gruppo o azzera la cronologia dei consigli.
           </Text>
           <Pressable
             accessibilityRole="button"
@@ -249,9 +249,9 @@ export default function HomeScreen() {
             <FilmCard
               key={movie.id}
               movie={movie}
-              isLiked={preferences.likedMovies.some((item) => item.id === movie.id)}
+              isWatched={preferences.watchedMovies.some((item) => item.id === movie.id)}
               isSaved={preferences.savedMovies.some((item) => item.id === movie.id)}
-              onToggleLike={toggleLikedMovie}
+              onToggleWatched={toggleWatchedMovie}
               onToggleSave={toggleSavedMovie}
               onDismiss={(movie) => {
                 dismissMovie(movie);
@@ -263,7 +263,7 @@ export default function HomeScreen() {
       )}
 
       <Text style={[styles.footer, { color: colors.mutedForeground }]}>
-        I consigli si adattano ai film che ami e alle piattaforme che selezioni.
+        I consigli si adattano ai film che hai già visto e alle piattaforme che selezioni.
       </Text>
     </ScrollView>
   );

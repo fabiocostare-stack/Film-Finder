@@ -29,7 +29,7 @@ import { useColors } from "@/hooks/useColors";
 export default function SearchScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { preferences, toggleLikedMovie, toggleSavedMovie } = usePreferences();
+  const { preferences, toggleWatchedMovie, toggleSavedMovie } = usePreferences();
   const [draft, setDraft] = useState<string>("");
   const [submitted, setSubmitted] = useState<string>("");
   const searchParams: SearchMoviesParams = {
@@ -149,9 +149,9 @@ export default function SearchScreen() {
               <FilmCard
                 key={movie.id}
                 movie={movie}
-                isLiked={preferences.likedMovies.some((item) => item.id === movie.id)}
+                isWatched={preferences.watchedMovies.some((item) => item.id === movie.id)}
                 isSaved={preferences.savedMovies.some((item) => item.id === movie.id)}
-                onToggleLike={toggleLikedMovie}
+                onToggleWatched={toggleWatchedMovie}
                 onToggleSave={toggleSavedMovie}
               />
             ))}

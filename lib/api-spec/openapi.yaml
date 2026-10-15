@@ -102,7 +102,7 @@ paths:
     get:
       operationId: getMovieRecommendations
       tags: [movies]
-      summary: Recommend films based on taste, liked genres, and streaming services
+      summary: Recommend films based on taste, watched genres, and streaming services
       parameters:
         - name: region
           in: query
@@ -120,7 +120,7 @@ paths:
             default: 1
         - name: genreIds
           in: query
-          description: Comma-separated movie genre IDs inferred from liked films and the user's written taste.
+          description: Comma-separated movie genre IDs inferred from watched films and the user's written taste. Matching uses any listed genre.
           schema:
             type: string
             maxLength: 200

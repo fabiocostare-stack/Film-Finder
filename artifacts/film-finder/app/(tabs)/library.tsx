@@ -14,7 +14,7 @@ import { useColors } from "@/hooks/useColors";
 export default function LibraryScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { preferences, toggleLikedMovie, toggleSavedMovie } = usePreferences();
+  const { preferences, toggleWatchedMovie, toggleSavedMovie } = usePreferences();
   const savedIds = new Set(preferences.savedMovies.map((movie) => movie.id));
 
   return (
@@ -32,7 +32,7 @@ export default function LibraryScreen() {
       <Text style={[styles.eyebrow, { color: colors.primary }]}>LA TUA CINETECA</Text>
       <Text style={[styles.title, { color: colors.foreground }]}>La mia lista</Text>
       <Text style={[styles.description, { color: colors.mutedForeground }]}>
-        Film da guardare e storie che ti sono rimaste.
+        Film da guardare e film che hai già visto.
       </Text>
 
       <SectionTitle
@@ -46,9 +46,9 @@ export default function LibraryScreen() {
             <FilmCard
               key={`saved-${movie.id}`}
               movie={movie}
-              isLiked={preferences.likedMovies.some((item) => item.id === movie.id)}
+              isWatched={preferences.watchedMovies.some((item) => item.id === movie.id)}
               isSaved={savedIds.has(movie.id)}
-              onToggleLike={toggleLikedMovie}
+              onToggleWatched={toggleWatchedMovie}
               onToggleSave={toggleSavedMovie}
             />
           ))}
@@ -62,28 +62,28 @@ export default function LibraryScreen() {
       )}
 
       <SectionTitle
-        icon="heart"
-        title="Mi piacciono"
-        count={preferences.likedMovies.length}
+        icon="check-circle"
+        title="Già visti"
+        count={preferences.watchedMovies.length}
       />
-      {preferences.likedMovies.length > 0 ? (
+      {preferences.watchedMovies.length > 0 ? (
         <View style={styles.list}>
-          {preferences.likedMovies.map((movie) => (
+          {preferences.watchedMovies.map((movie) => (
             <FilmCard
-              key={`liked-${movie.id}`}
+              key={`watched-${movie.id}`}
               movie={movie}
-              isLiked
+              isWatched
               isSaved={savedIds.has(movie.id)}
-              onToggleLike={toggleLikedMovie}
+              onToggleWatched={toggleWatchedMovie}
               onToggleSave={toggleSavedMovie}
             />
           ))}
         </View>
       ) : (
         <EmptyCollection
-          icon="heart"
-          title="Ancora nessun preferito"
-          message="Cerca un film e tocca il cuore: i tuoi gusti aiuteranno a scegliere i prossimi."
+          icon="check-circle"
+          title="Nessun film segnato come già visto"
+          message="Quando hai già guardato un film, segnalo così aiuterà a scegliere i prossimi consigli."
         />
       )}
     </ScrollView>
@@ -95,7 +95,7 @@ function SectionTitle({
   title,
   count,
 }: {
-  icon: "bookmark" | "heart";
+  icon: "bookmark" | "check-circle";
   title: string;
   count: number;
 }) {
@@ -118,7 +118,7 @@ function EmptyCollection({
   title,
   message,
 }: {
-  icon: "bookmark" | "heart";
+  icon: "bookmark" | "check-circle";
   title: string;
   message: string;
 }) {

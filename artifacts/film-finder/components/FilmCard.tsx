@@ -19,9 +19,9 @@ import { useColors } from "@/hooks/useColors";
 
 type FilmCardProps = {
   movie: Movie;
-  isLiked: boolean;
+  isWatched: boolean;
   isSaved: boolean;
-  onToggleLike: (movie: Movie) => void;
+  onToggleWatched: (movie: Movie) => void;
   onToggleSave: (movie: Movie) => void;
   onDismiss?: (movie: Movie) => void;
 };
@@ -32,9 +32,9 @@ function yearOf(date: string): string {
 
 export function FilmCard({
   movie,
-  isLiked,
+  isWatched,
   isSaved,
-  onToggleLike,
+  onToggleWatched,
   onToggleSave,
   onDismiss,
 }: FilmCardProps) {
@@ -133,22 +133,40 @@ export function FilmCard({
               Dove vederlo
             </Text>
           </Pressable>
-          <View style={styles.iconActions}>
-            <Pressable
-              testID={`like-${movie.id}`}
-              accessibilityRole="button"
-              accessibilityLabel={
-                isLiked ? `Rimuovi ${movie.title} dai preferiti` : `Mi piace ${movie.title}`
-              }
-              onPress={() => onToggleLike(movie)}
-              style={({ pressed }) => [styles.iconAction, { opacity: pressed ? 0.55 : 1 }]}
+          <Pressable
+            testID={`watched-${movie.id}`}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: isWatched }}
+            accessibilityLabel={
+              isWatched
+                ? `Rimuovi ${movie.title} dai film già visti`
+                : `Segna ${movie.title} come già visto`
+            }
+            onPress={() => onToggleWatched(movie)}
+            style={({ pressed }) => [
+              styles.watchedAction,
+              {
+                backgroundColor: isWatched ? colors.accent : "transparent",
+                borderColor: isWatched ? colors.accent : colors.border,
+                opacity: pressed ? 0.65 : 1,
+              },
+            ]}
+          >
+            <Feather
+              name={isWatched ? "check-circle" : "eye"}
+              size={13}
+              color={isWatched ? colors.primary : colors.mutedForeground}
+            />
+            <Text
+              style={[
+                styles.actionLabel,
+                { color: isWatched ? colors.primary : colors.mutedForeground },
+              ]}
             >
-              <Feather
-                name={isLiked ? "heart" : "heart"}
-                size={17}
-                color={isLiked ? colors.primary : colors.mutedForeground}
-              />
-            </Pressable>
+              Già visto
+            </Text>
+          </Pressable>
+          <View style={styles.iconActions}>
             <Pressable
               testID={`save-${movie.id}`}
               accessibilityRole="button"
@@ -260,6 +278,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
+  },
+  watchedAction: {
+    minHeight: 31,
+    paddingHorizontal: 6,
+    borderWidth: 1,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   actionLabel: { fontSize: 9, fontFamily: "Inter_600SemiBold" },
   iconActions: { flexDirection: "row", alignItems: "center", gap: 5 },

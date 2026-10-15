@@ -13,9 +13,9 @@ import {
 const STORAGE_KEY = "film-finder.preferences.v1";
 
 export type MoviePreferences = {
-  likedMovies: Movie[];
+  watchedMovies: Movie[];
   savedMovies: Movie[];
-  seenMovieIds: number[];
+  shownMovieIds: number[];
   dismissedMovieIds: number[];
   selectedProviders: MovieProvider[];
   taste: string;
@@ -26,19 +26,19 @@ type PreferencesContextValue = {
   preferences: MoviePreferences;
   isReady: boolean;
   storageError: boolean;
-  toggleLikedMovie: (movie: Movie) => void;
+  toggleWatchedMovie: (movie: Movie) => void;
   toggleSavedMovie: (movie: Movie) => void;
   toggleProvider: (provider: MovieProvider) => void;
   saveTaste: (taste: string) => void;
-  markSeen: (ids: number[]) => void;
+  markShown: (ids: number[]) => void;
   dismissMovie: (movie: Movie) => void;
   clearRecommendationHistory: () => void;
 };
 
 const emptyPreferences: MoviePreferences = {
-  likedMovies: [],
+  watchedMovies: [],
   savedMovies: [],
-  seenMovieIds: [],
+  shownMovieIds: [],
   dismissedMovieIds: [],
   selectedProviders: [],
   taste: "",
@@ -47,17 +47,39 @@ const emptyPreferences: MoviePreferences = {
 
 const PreferencesContext = createContext<PreferencesContextValue | null>(null);
 
-function isMoviePreferences(value: unknown): value is MoviePreferences {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<MoviePreferences>;
-  return (
-    Array.isArray(candidate.likedMovies) &&
-    Array.isArray(candidate.savedMovies) &&
-    Array.isArray(candidate.seenMovieIds) &&
-    Array.isArray(candidate.dismissedMovieIds) &&
-    Array.isArray(candidate.selectedProviders) &&
-    typeof candidate.taste === "string"
-  );
+function restorePreferences(value: unknown): MoviePreferences | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.taste !== "string") return null;
+
+  const legacyLikes = Array.isArray(candidate.likedMovies)
+    ? (candidate.likedMovies as Movie[])
+    : [];
+
+  return {
+    watchedMovies: Array.isArray(candidate.watchedMovies)
+      ? (candidate.watchedMovies as Movie[])
+      : legacyLikes,
+    savedMovies: Array.isArray(candidate.savedMovies)
+      ? (candidate.savedMovies as Movie[])
+      : [],
+    shownMovieIds: Array.isArray(candidate.shownMovieIds)
+      ? (candidate.shownMovieIds as number[])
+      : Array.isArray(candidate.seenMovieIds)
+        ? (candidate.seenMovieIds as number[])
+      : [],
+    dismissedMovieIds: Array.isArray(candidate.dismissedMovieIds)
+      ? (candidate.dismissedMovieIds as number[])
+      : [],
+    selectedProviders: Array.isArray(candidate.selectedProviders)
+      ? (candidate.selectedProviders as MovieProvider[])
+      : [],
+    taste: candidate.taste,
+    historyRevision:
+      typeof candidate.historyRevision === "number"
+        ? candidate.historyRevision
+        : 0,
+  };
 }
 
 function toggleMovie(movies: Movie[], movie: Movie): Movie[] {
@@ -78,15 +100,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       .then((stored) => {
         if (!mounted || !stored) return;
         const parsed: unknown = JSON.parse(stored);
-        if (isMoviePreferences(parsed)) {
-          setPreferences({
-            ...parsed,
-            historyRevision:
-              typeof parsed.historyRevision === "number"
-                ? parsed.historyRevision
-                : 0,
-          });
-        }
+        const restored = restorePreferences(parsed);
+        if (restored) setPreferences(restored);
       })
       .catch(() => {
         if (mounted) setStorageError(true);
@@ -106,11 +121,19 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     );
   }, [isReady, preferences]);
 
-  const toggleLikedMovie = useCallback((movie: Movie) => {
-    setPreferences((current) => ({
-      ...current,
-      likedMovies: toggleMovie(current.likedMovies, movie),
-    }));
+  const toggleWatchedMovie = useCallback((movie: Movie) => {
+    setPreferences((current) => {
+      const wasWatched = current.watchedMovies.some(
+        (item) => item.id === movie.id,
+      );
+      return {
+        ...current,
+        watchedMovies: toggleMovie(current.watchedMovies, movie),
+        savedMovies: wasWatched
+          ? current.savedMovies
+          : current.savedMovies.filter((item) => item.id !== movie.id),
+      };
+    });
   }, []);
 
   const toggleSavedMovie = useCallback((movie: Movie) => {
@@ -135,19 +158,19 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     setPreferences((current) => ({ ...current, taste }));
   }, []);
 
-  const markSeen = useCallback((ids: number[]) => {
+  const markShown = useCallback((ids: number[]) => {
     if (ids.length === 0) return;
     setPreferences((current) => {
-      const seen = new Set(current.seenMovieIds);
-      for (const id of ids) seen.add(id);
-      const next = [...seen].slice(-1000);
+      const shown = new Set(current.shownMovieIds);
+      for (const id of ids) shown.add(id);
+      const next = [...shown].slice(-1000);
       if (
-        next.length === current.seenMovieIds.length &&
-        next.every((id, index) => id === current.seenMovieIds[index])
+        next.length === current.shownMovieIds.length &&
+        next.every((id, index) => id === current.shownMovieIds[index])
       ) {
         return current;
       }
-      return { ...current, seenMovieIds: next };
+      return { ...current, shownMovieIds: next };
     });
   }, []);
 
@@ -157,14 +180,14 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       dismissedMovieIds: [...new Set([...current.dismissedMovieIds, movie.id])].slice(
         -1000,
       ),
-      seenMovieIds: [...new Set([...current.seenMovieIds, movie.id])].slice(-1000),
+      shownMovieIds: [...new Set([...current.shownMovieIds, movie.id])].slice(-1000),
     }));
   }, []);
 
   const clearRecommendationHistory = useCallback(() => {
     setPreferences((current) => ({
       ...current,
-      seenMovieIds: [],
+      shownMovieIds: [],
       dismissedMovieIds: [],
       historyRevision: current.historyRevision + 1,
     }));
@@ -175,11 +198,11 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       preferences,
       isReady,
       storageError,
-      toggleLikedMovie,
+      toggleWatchedMovie,
       toggleSavedMovie,
       toggleProvider,
       saveTaste,
-      markSeen,
+      markShown,
       dismissMovie,
       clearRecommendationHistory,
     }),
@@ -187,11 +210,11 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       preferences,
       isReady,
       storageError,
-      toggleLikedMovie,
+      toggleWatchedMovie,
       toggleSavedMovie,
       toggleProvider,
       saveTaste,
-      markSeen,
+      markShown,
       dismissMovie,
       clearRecommendationHistory,
     ],
