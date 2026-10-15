@@ -1,1 +1,2 @@
 - [Orval path-parameter export collision](orval-path-parameter-collision.md) — GET path-parameter schemas can collide with generated TypeScript parameter types.
+- [TMDB streaming-region filter](tmdb-provider-region-filter.md) — `with_watch_providers` needs `watch_region`; `region` alone does not constrain streaming availability.

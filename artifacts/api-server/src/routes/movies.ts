@@ -344,6 +344,7 @@ router.get("/movies/recommendations", async (req, res): Promise<void> => {
   if (providers.length > 0) {
     params.with_watch_providers = providers.join("|");
     params.with_watch_monetization_types = "flatrate|free|ads";
+    params.watch_region = region;
   }
   if (sortBy === "vote_average.desc") params["vote_count.gte"] = 50;
 
