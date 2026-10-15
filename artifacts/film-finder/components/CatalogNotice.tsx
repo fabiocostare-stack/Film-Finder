@@ -2,6 +2,56 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 
+export function getCatalogErrorMessage(
+  error: unknown,
+  fallback: string,
+): string {
+  if (!error || typeof error !== "object") return fallback;
+
+  const failure = error as {
+    data?: unknown;
+    message?: unknown;
+    status?: unknown;
+  };
+  const data =
+    failure.data && typeof failure.data === "object"
+      ? (failure.data as Record<string, unknown>)
+      : undefined;
+  const code = typeof data?.code === "string" ? data.code : undefined;
+  const apiMessage = typeof data?.error === "string" ? data.error.trim() : "";
+
+  if (code === "movie_service_not_configured") {
+    return "Il server che ha risposto non ha ricevuto TMDB_API_KEY. La chiave va configurata nei Secrets del progetto collegato a questo server.";
+  }
+  if (code === "movie_service_credentials_invalid") {
+    return "TMDB ha rifiutato la chiave configurata. Verifica che sia una chiave API TMDB attiva, non un token di lettura.";
+  }
+  if (code === "movie_catalog_rate_limited") {
+    return "TMDB sta limitando temporaneamente le richieste. Attendi qualche secondo e riprova.";
+  }
+  if (apiMessage) return apiMessage;
+
+  const message =
+    typeof failure.message === "string" ? failure.message.toLowerCase() : "";
+  if (
+    error instanceof TypeError ||
+    /network request failed|failed to fetch|network error|timed out|timeout/.test(
+      message,
+    )
+  ) {
+    return "Il telefono non riesce a raggiungere il server di Film Finder. Verifica la connessione e riprova.";
+  }
+
+  if (failure.status === 401 || failure.status === 403) {
+    return "Il server non ha autorizzato la richiesta. Controlla la configurazione del catalogo e riprova.";
+  }
+  if (typeof failure.status === "number" && failure.status >= 500) {
+    return "Il server del catalogo ha avuto un problema temporaneo. Riprova tra poco.";
+  }
+
+  return fallback;
+}
+
 export function CatalogNotice({
   title,
   message,

@@ -14,7 +14,10 @@ import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FilmCard } from "@/components/FilmCard";
-import { CatalogNotice } from "@/components/CatalogNotice";
+import {
+  CatalogNotice,
+  getCatalogErrorMessage,
+} from "@/components/CatalogNotice";
 import { useColors } from "@/hooks/useColors";
 import { usePreferences } from "@/context/PreferencesContext";
 
@@ -202,8 +205,11 @@ export default function HomeScreen() {
         </View>
       ) : recommendations.isError ? (
         <CatalogNotice
-          title="Il catalogo va collegato"
-          message="Per caricare film reali e disponibilità streaming, aggiungi una chiave API TMDB ai Secrets del progetto. Non mostriamo titoli di esempio."
+          title="Catalogo non disponibile"
+          message={getCatalogErrorMessage(
+            recommendations.error,
+            "Non è stato possibile caricare i consigli. Verifica la connessione e riprova.",
+          )}
           onRetry={() => void recommendations.refetch()}
         />
       ) : movieCount === 0 ? (

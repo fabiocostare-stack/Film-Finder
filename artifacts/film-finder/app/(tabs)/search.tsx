@@ -18,7 +18,10 @@ import {
 } from "@workspace/api-client-react";
 import type { SearchMoviesParams } from "@workspace/api-client-react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { CatalogNotice } from "@/components/CatalogNotice";
+import {
+  CatalogNotice,
+  getCatalogErrorMessage,
+} from "@/components/CatalogNotice";
 import { FilmCard } from "@/components/FilmCard";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
@@ -131,7 +134,10 @@ export default function SearchScreen() {
         ) : search.isError ? (
           <CatalogNotice
             title="Ricerca non disponibile"
-            message="Il catalogo reale non è ancora collegato. Aggiungi una chiave API TMDB ai Secrets del progetto e riprova."
+            message={getCatalogErrorMessage(
+              search.error,
+              "Non è stato possibile raggiungere il catalogo. Verifica la connessione e riprova.",
+            )}
             onRetry={() => void search.refetch()}
           />
         ) : search.data?.results.length ? (

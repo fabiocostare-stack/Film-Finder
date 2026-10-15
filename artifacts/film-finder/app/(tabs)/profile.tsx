@@ -16,7 +16,10 @@ import {
   type MovieProvider,
 } from "@workspace/api-client-react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { CatalogNotice } from "@/components/CatalogNotice";
+import {
+  CatalogNotice,
+  getCatalogErrorMessage,
+} from "@/components/CatalogNotice";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -162,7 +165,10 @@ export default function ProfileScreen() {
       ) : providers.isError ? (
         <CatalogNotice
           title="Piattaforme non disponibili"
-          message="I servizi reali verranno elencati quando il catalogo TMDB sarà collegato. In questo modo evitiamo indicazioni non verificate."
+          message={getCatalogErrorMessage(
+            providers.error,
+            "Non è stato possibile caricare le piattaforme. Verifica la connessione e riprova.",
+          )}
           onRetry={() => void providers.refetch()}
         />
       ) : (
