@@ -149,7 +149,7 @@ export default function ProfileScreen() {
             Le tue piattaforme
           </Text>
           <Text style={[styles.sectionCaption, { color: colors.mutedForeground }]}>
-            Seleziona solo i servizi che hai.
+            I consigli mostreranno solo film disponibili sui servizi selezionati.
           </Text>
         </View>
         <Feather name="tv" size={18} color={colors.primary} />

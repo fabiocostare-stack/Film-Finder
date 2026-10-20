@@ -102,7 +102,7 @@ paths:
     get:
       operationId: getMovieRecommendations
       tags: [movies]
-      summary: Recommend films based on taste, watched genres, and streaming services
+      summary: Recommend highly rated films matching selected streaming services and watched titles
       parameters:
         - name: region
           in: query
@@ -126,13 +126,21 @@ paths:
             maxLength: 200
         - name: providerIds
           in: query
+          required: true
           description: Comma-separated streaming provider IDs selected by the user.
           schema:
             type: string
+            minLength: 1
             maxLength: 200
+        - name: seedMovieIds
+          in: query
+          description: Up to four movie IDs from the user's watched list to personalize recommendations by title similarity.
+          schema:
+            type: string
+            maxLength: 100
         - name: excludeIds
           in: query
-          description: Comma-separated movie IDs already shown, liked, or dismissed.
+          description: Comma-separated movie IDs already shown, watched, or dismissed.
           schema:
             type: string
             maxLength: 10000

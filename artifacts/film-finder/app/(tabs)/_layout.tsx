@@ -1,5 +1,12 @@
 import React from 'react';
-import { Platform, StyleSheet, useColorScheme, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
+} from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -8,6 +15,8 @@ import { Tabs } from 'expo-router';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePreferences } from '@/context/PreferencesContext';
+import PlatformOnboarding from '@/components/PlatformOnboarding';
 
 // IMPORTANT: iOS 26 uses NativeTabs for native tabs with liquid glass support.
 // NativeTabs intentionally does NOT use custom design tokens — liquid glass
@@ -136,8 +145,36 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
+  const colors = useColors();
+  const { isReady, preferences } = usePreferences();
+
+  if (!isReady) {
+    return (
+      <View
+        style={[
+          styles.startup,
+          { backgroundColor: colors.background },
+        ]}
+      >
+        <ActivityIndicator color={colors.primary} />
+        <Text style={[styles.startupText, { color: colors.mutedForeground }]}>
+          Carico le tue preferenze…
+        </Text>
+      </View>
+    );
+  }
+
+  if (!preferences.platformSetupComplete) {
+    return <PlatformOnboarding />;
+  }
+
   if (isLiquidGlassAvailable()) {
     return <NativeTabLayout />;
   }
   return <ClassicTabLayout />;
 }
+
+const styles = StyleSheet.create({
+  startup: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  startupText: { fontSize: 12 },
+});

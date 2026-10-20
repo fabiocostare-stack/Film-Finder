@@ -27,6 +27,7 @@ type TmdbMovie = {
   backdrop_path?: string | null;
   release_date?: string;
   vote_average?: number;
+  vote_count?: number;
   genre_ids?: number[];
   original_language?: string;
 };
@@ -127,6 +128,107 @@ function inferGenres(taste?: string): number[] {
   return Object.entries(genreTerms)
     .filter(([, terms]) => terms.some((term) => normalized.includes(term)))
     .map(([id]) => Number(id));
+}
+
+type SimilarMovie = {
+  movie: TmdbMovie;
+  matchedSeeds: number;
+  rankScore: number;
+};
+
+async function getSimilarMovies(
+  seedMovieIds: number[],
+  page: number,
+): Promise<SimilarMovie[]> {
+  const candidates = new Map<number, SimilarMovie>();
+  const responses = await Promise.allSettled(
+    seedMovieIds.slice(0, 4).map((movieId) =>
+      getTmdb<TmdbList<TmdbMovie>>(
+        `/movie/${movieId}/recommendations`,
+        { language: "it-IT", page },
+        12 * 60 * 60 * 1000,
+      ),
+    ),
+  );
+
+  for (const response of responses) {
+    if (response.status !== "fulfilled") continue;
+    for (const [index, movie] of (response.value.results ?? [])
+      .slice(0, 20)
+      .entries()) {
+      const current = candidates.get(movie.id) ?? {
+        movie,
+        matchedSeeds: 0,
+        rankScore: 0,
+      };
+      current.matchedSeeds += 1;
+      current.rankScore += 1 / Math.log2(index + 2);
+      candidates.set(movie.id, current);
+    }
+  }
+
+  return [...candidates.values()].sort(
+    (a, b) =>
+      b.matchedSeeds - a.matchedSeeds ||
+      b.rankScore - a.rankScore ||
+      (b.movie.vote_average ?? 0) - (a.movie.vote_average ?? 0) ||
+      (b.movie.vote_count ?? 0) - (a.movie.vote_count ?? 0),
+  );
+}
+
+async function getAvailableSimilarMovies(
+  candidates: SimilarMovie[],
+  region: string,
+  selectedProviderIds: number[],
+  excludeIds: number[],
+  minRating: number,
+  minVoteCount: number,
+  maxChecks: number,
+  checkedIds: Set<number>,
+): Promise<SimilarMovie[]> {
+  const excluded = new Set(excludeIds);
+  const providerIds = new Set(selectedProviderIds);
+  const eligible = candidates.filter(
+    ({ movie }) =>
+      !excluded.has(movie.id) &&
+      !checkedIds.has(movie.id) &&
+      (movie.vote_average ?? 0) >= minRating &&
+      (movie.vote_count ?? 0) >= minVoteCount,
+  );
+  const available: SimilarMovie[] = [];
+
+  for (
+    let offset = 0;
+    offset < eligible.length &&
+    offset < maxChecks &&
+    available.length < 20;
+    offset += 4
+  ) {
+    const batch = eligible.slice(offset, Math.min(offset + 4, maxChecks));
+    for (const candidate of batch) checkedIds.add(candidate.movie.id);
+    const responses = await Promise.allSettled(
+      batch.map(({ movie }) =>
+        getTmdb<TmdbAvailability>(
+          `/movie/${movie.id}/watch/providers`,
+          {},
+          6 * 60 * 60 * 1000,
+        ),
+      ),
+    );
+
+    responses.forEach((response, index) => {
+      if (response.status !== "fulfilled") return;
+      const availability = response.value.results?.[region];
+      const availableOnSelectedProvider = [
+        ...(availability?.flatrate ?? []),
+        ...(availability?.free ?? []),
+        ...(availability?.ads ?? []),
+      ].some((provider) => providerIds.has(provider.provider_id));
+      if (availableOnSelectedProvider) available.push(batch[index]);
+    });
+  }
+
+  return available;
 }
 
 async function getTmdb<T>(
@@ -316,6 +418,7 @@ router.get("/movies/recommendations", async (req, res): Promise<void> => {
     region: rawRegion,
     genreIds: rawGenreIds,
     providerIds: rawProviderIds,
+    seedMovieIds: rawSeedMovieIds,
     excludeIds: rawExcludeIds,
     taste,
   } = parsed.data;
@@ -324,64 +427,155 @@ router.get("/movies/recommendations", async (req, res): Promise<void> => {
     ...new Set([...parseIds(rawGenreIds), ...inferGenres(taste)]),
   ];
   const providers = parseIds(rawProviderIds);
+  const seedMovieIds = parseIds(rawSeedMovieIds).slice(0, 4);
   const excludeIds = parseIds(rawExcludeIds);
   const pageNumber = page ?? 1;
-  const sorts = [
-    "popularity.desc",
-    "vote_average.desc",
-    "revenue.desc",
-    "primary_release_date.desc",
-  ];
-  const sortBy = sorts[(pageNumber - 1) % sorts.length] ?? "popularity.desc";
+
+  if (providers.length === 0) {
+    res.status(400).json({
+      error: "Seleziona almeno una piattaforma per ricevere consigli.",
+      code: "streaming_provider_required",
+    } satisfies MovieErrorResponse);
+    return;
+  }
+
   const params: Record<string, string | number> = {
     language: "it-IT",
     region,
     include_adult: "false",
-    sort_by: sortBy,
-    page: pageNumber,
+    sort_by: "vote_average.desc",
+      "vote_average.gte": 7,
+    "vote_count.gte": 100,
   };
   if (genres.length > 0) params.with_genres = genres.join("|");
-  if (providers.length > 0) {
-    params.with_watch_providers = providers.join("|");
-    params.with_watch_monetization_types = "flatrate|free|ads";
-    params.watch_region = region;
-  }
-  if (sortBy === "vote_average.desc") params["vote_count.gte"] = 50;
+  params.with_watch_providers = providers.join("|");
+  params.with_watch_monetization_types = "flatrate|free|ads";
+  params.watch_region = region;
 
   try {
-    const results: Movie[] = [];
+    const discoveryPagePromise = getTmdb<TmdbList<TmdbMovie>>(
+      "/discover/movie",
+      { ...params, page: pageNumber },
+      3 * 60 * 1000,
+    );
+    const similarMoviesPromise = getSimilarMovies(seedMovieIds, pageNumber);
+    const [discoveryPage, similarMovies] = await Promise.all([
+      discoveryPagePromise,
+      similarMoviesPromise,
+    ]);
+    const checkedSimilarIds = new Set<number>();
+    const relatedMovies = await getAvailableSimilarMovies(
+      similarMovies,
+      region,
+      providers,
+      excludeIds,
+      7,
+      100,
+      32,
+      checkedSimilarIds,
+    );
+    const relaxedRelatedMovies =
+      relatedMovies.length < 20
+        ? await getAvailableSimilarMovies(
+            similarMovies,
+            region,
+            providers,
+            excludeIds,
+            6.5,
+            50,
+            32,
+            checkedSimilarIds,
+          )
+        : [];
+    const movieResults: Array<{
+      movie: Movie;
+      matchedSeeds: number;
+      rankScore: number;
+      voteCount: number;
+    }> = [];
     const resultIds = new Set<number>();
-    let totalPages = 0;
-    let totalResults = 0;
-    const lastPageToScan = Math.min(500, pageNumber + 2);
+    let totalPages = discoveryPage.total_pages ?? 0;
+    let totalResults = discoveryPage.total_results ?? 0;
+    const excluded = new Set(excludeIds);
 
-    for (
-      let scanPage = pageNumber;
-      scanPage <= lastPageToScan && results.length < 20;
-      scanPage += 1
-    ) {
-      const payload = await getTmdb<TmdbList<TmdbMovie>>(
-        "/discover/movie",
-        { ...params, page: scanPage },
-        3 * 60 * 1000,
-      );
-      const pageResults = parseListResponse(payload, excludeIds);
-      totalPages = pageResults.totalPages;
-      totalResults = pageResults.totalResults;
+    for (const candidate of [...relatedMovies, ...relaxedRelatedMovies]) {
+      if (resultIds.has(candidate.movie.id)) continue;
+      resultIds.add(candidate.movie.id);
+      movieResults.push({
+        movie: mapMovie(candidate.movie),
+        matchedSeeds: candidate.matchedSeeds,
+        rankScore: candidate.rankScore,
+        voteCount: candidate.movie.vote_count ?? 0,
+      });
+    }
 
-      for (const movie of pageResults.results) {
-        if (resultIds.has(movie.id)) continue;
-        resultIds.add(movie.id);
-        results.push(movie);
+    const qualityLevels = [
+      { "vote_average.gte": 7, "vote_count.gte": 100 },
+      { "vote_average.gte": 6.5, "vote_count.gte": 50 },
+    ];
+    for (const [qualityIndex, quality] of qualityLevels.entries()) {
+      if (movieResults.length >= 20) break;
+      const qualityParams = { ...params, ...quality };
+      const lastPageToScan = Math.min(500, pageNumber + 2);
+
+      for (
+        let scanPage = pageNumber;
+        scanPage <= lastPageToScan && movieResults.length < 20;
+        scanPage += 1
+      ) {
+        const payload =
+          qualityIndex === 0 && scanPage === pageNumber
+            ? discoveryPage
+            : await getTmdb<TmdbList<TmdbMovie>>(
+                "/discover/movie",
+                { ...qualityParams, page: scanPage },
+                3 * 60 * 1000,
+              );
+        totalPages = payload.total_pages ?? 0;
+        totalResults = payload.total_results ?? 0;
+
+        for (const movie of payload.results ?? []) {
+          if (excluded.has(movie.id) || resultIds.has(movie.id)) continue;
+          resultIds.add(movie.id);
+          movieResults.push({
+            movie: mapMovie(movie),
+            matchedSeeds: 0,
+            rankScore: 0,
+            voteCount: movie.vote_count ?? 0,
+          });
+        }
+
+        if (scanPage >= totalPages) break;
       }
 
-      if (scanPage >= totalPages) break;
+      if (
+        movieResults.length >= 20 ||
+        (totalResults === 0 && qualityIndex === 1)
+      ) {
+        break;
+      }
     }
+
+    const combinedScore = (item: (typeof movieResults)[number]) => {
+      const affinity = Math.min(
+        1,
+        (item.matchedSeeds / 4) * 0.65 + (item.rankScore / 4) * 0.35,
+      );
+      return (item.movie.voteAverage / 10) * 0.5 + affinity * 0.5;
+    };
+    movieResults.sort(
+      (a, b) =>
+        combinedScore(b) - combinedScore(a) ||
+        b.matchedSeeds - a.matchedSeeds ||
+        b.rankScore - a.rankScore ||
+        b.movie.voteAverage - a.movie.voteAverage ||
+        b.voteCount - a.voteCount,
+    );
 
     res.json(
       GetMovieRecommendationsResponse.parse(
         {
-          results: results.slice(0, 20),
+          results: movieResults.slice(0, 20).map((item) => item.movie),
           page: pageNumber,
           totalPages,
           totalResults,

@@ -300,7 +300,7 @@ export function useListMovieProviders<TData = Awaited<ReturnType<typeof listMovi
 
 
 
-export const getGetMovieRecommendationsUrl = (params?: GetMovieRecommendationsParams,) => {
+export const getGetMovieRecommendationsUrl = (params: GetMovieRecommendationsParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -318,7 +318,7 @@ export const getGetMovieRecommendationsUrl = (params?: GetMovieRecommendationsPa
 /**
  * @summary Recommend films based on taste, watched genres, and streaming services
  */
-export const getMovieRecommendations = async (params?: GetMovieRecommendationsParams, options?: Parameters<typeof customFetch>[1]): Promise<MovieSearchResponse> => {
+export const getMovieRecommendations = async (params: GetMovieRecommendationsParams, options?: Parameters<typeof customFetch>[1]): Promise<MovieSearchResponse> => {
 
   return customFetch<MovieSearchResponse>(getGetMovieRecommendationsUrl(params),
   {
@@ -340,7 +340,7 @@ export const getGetMovieRecommendationsQueryKey = (params?: GetMovieRecommendati
     }
 
 
-export const getGetMovieRecommendationsQueryOptions = <TData = Awaited<ReturnType<typeof getMovieRecommendations>>, TError = ErrorType<MovieErrorResponse>>(params?: GetMovieRecommendationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMovieRecommendations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetMovieRecommendationsQueryOptions = <TData = Awaited<ReturnType<typeof getMovieRecommendations>>, TError = ErrorType<MovieErrorResponse>>(params: GetMovieRecommendationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMovieRecommendations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -367,7 +367,7 @@ export type GetMovieRecommendationsQueryError = ErrorType<MovieErrorResponse>
  */
 
 export function useGetMovieRecommendations<TData = Awaited<ReturnType<typeof getMovieRecommendations>>, TError = ErrorType<MovieErrorResponse>>(
- params?: GetMovieRecommendationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMovieRecommendations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params: GetMovieRecommendationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMovieRecommendations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 

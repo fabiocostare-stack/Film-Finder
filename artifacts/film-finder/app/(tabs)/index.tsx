@@ -9,8 +9,12 @@ import {
   View,
 } from "react-native";
 import { useGetMovieRecommendations } from "@workspace/api-client-react";
-import type { GetMovieRecommendationsParams } from "@workspace/api-client-react";
+import type {
+  GetMovieRecommendationsParams,
+  Movie,
+} from "@workspace/api-client-react";
 import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FilmCard } from "@/components/FilmCard";
@@ -21,9 +25,24 @@ import {
 import { useColors } from "@/hooks/useColors";
 import { usePreferences } from "@/context/PreferencesContext";
 
+function getPreferredGenres(movies: Movie[]): number[] {
+  const weights = new Map<number, number>();
+  movies.slice(0, 60).forEach((movie, index) => {
+    const recencyWeight = 1 / (1 + index * 0.12);
+    for (const genreId of new Set(movie.genreIds)) {
+      weights.set(genreId, (weights.get(genreId) ?? 0) + recencyWeight);
+    }
+  });
+  return [...weights.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+    .slice(0, 4)
+    .map(([genreId]) => genreId);
+}
+
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const {
     preferences,
     isReady,
@@ -34,6 +53,19 @@ export default function HomeScreen() {
     clearRecommendationHistory,
   } = usePreferences();
   const [page, setPage] = useState<number>(1);
+  const hasSelectedProviders = preferences.selectedProviders.length > 0;
+  const preferredGenres = useMemo(
+    () => getPreferredGenres(preferences.watchedMovies),
+    [preferences.watchedMovies],
+  );
+  const seedMovieIds = useMemo(
+    () =>
+      preferences.watchedMovies
+        .slice(0, 4)
+        .map((movie) => movie.id)
+        .join(","),
+    [preferences.watchedMovies],
+  );
 
   const excludedIds = useMemo(
     () =>
@@ -54,19 +86,19 @@ export default function HomeScreen() {
     () => ({
       region: "IT",
       page,
-      providerIds:
-        preferences.selectedProviders.length > 0
-          ? preferences.selectedProviders.map((provider) => provider.id).join(",")
-          : undefined,
-      genreIds: [...new Set(preferences.watchedMovies.flatMap((movie) => movie.genreIds))]
-        .slice(0, 12)
-        .join(",") || undefined,
+      providerIds: preferences.selectedProviders
+        .map((provider) => provider.id)
+        .join(","),
+      seedMovieIds: seedMovieIds || undefined,
+      genreIds: preferredGenres.join(",") || undefined,
       excludeIds: excludedIds || undefined,
       taste: preferences.taste.trim() || undefined,
     }),
     [
       excludedIds,
       page,
+      preferredGenres,
+      seedMovieIds,
       preferences.watchedMovies,
       preferences.selectedProviders,
       preferences.taste,
@@ -91,7 +123,10 @@ export default function HomeScreen() {
   );
   const recommendations = useGetMovieRecommendations(queryParams, {
     query: {
-      enabled: isReady,
+      enabled:
+        isReady &&
+        preferences.platformSetupComplete &&
+        hasSelectedProviders,
       queryKey: recommendationKey,
       staleTime: Infinity,
       refetchOnWindowFocus: false,
@@ -106,6 +141,10 @@ export default function HomeScreen() {
 
   const movieCount = recommendations.data?.results.length ?? 0;
   const paddingTop = Platform.OS === "web" ? 67 : insets.top + 10;
+  const resetRecommendations = () => {
+    clearRecommendationHistory();
+    setPage(1);
+  };
 
   return (
     <ScrollView
@@ -150,7 +189,7 @@ export default function HomeScreen() {
             Meno scroll.{"\n"}Più cinema.
           </Text>
           <Text style={[styles.featureBody, { color: colors.mutedForeground }]}>
-            Consigli basati sui tuoi gusti e sui servizi che hai già.
+            Solo sui servizi che hai. Prima i film più apprezzati e vicini a ciò che hai visto.
           </Text>
         </View>
         <View style={[styles.reelMark, { backgroundColor: colors.primary }]}>
@@ -164,24 +203,23 @@ export default function HomeScreen() {
             Scelti per te
           </Text>
           <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
-            Ogni giro, una selezione diversa
+            Solo sui tuoi servizi · per affinità e voto
           </Text>
         </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Mostra nuovi consigli"
           testID="refresh-recommendations"
-          disabled={recommendations.isFetching}
+          disabled={!hasSelectedProviders || recommendations.isFetching}
           onPress={() => {
             if (movieCount > 0) {
               markShown(recommendations.data?.results.map((movie) => movie.id) ?? []);
             }
-            setPage((current) =>
-              recommendations.data?.totalPages &&
-              current >= recommendations.data.totalPages
-                ? 1
-                : current + 1,
-            );
+            if (page >= 500) {
+              resetRecommendations();
+            } else {
+              setPage((current) => Math.min(current + 1, 500));
+            }
           }}
           style={({ pressed }) => [
             styles.iconButton,
@@ -196,12 +234,36 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      {!isReady || recommendations.isLoading ? (
+      {!isReady || (hasSelectedProviders && recommendations.isLoading) ? (
         <View style={[styles.loadingPanel, { borderColor: colors.border }]}>
           <ActivityIndicator color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>
             Prepariamo i tuoi consigli…
           </Text>
+        </View>
+      ) : !hasSelectedProviders ? (
+        <View style={[styles.emptyPanel, { borderColor: colors.border }]}>
+          <Feather name="tv" size={24} color={colors.primary} />
+          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+            Scegli dove guardare
+          </Text>
+          <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
+            Per mostrarti solo film disponibili per te, seleziona almeno una
+            piattaforma nel profilo.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            testID="choose-streaming-platforms"
+            onPress={() => router.push("/(tabs)/profile")}
+            style={({ pressed }) => [
+              styles.secondaryButton,
+              { borderColor: colors.border, opacity: pressed ? 0.75 : 1 },
+            ]}
+          >
+            <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>
+              Scegli piattaforme
+            </Text>
+          </Pressable>
         </View>
       ) : recommendations.isError ? (
         <CatalogNotice
@@ -235,7 +297,7 @@ export default function HomeScreen() {
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            onPress={clearRecommendationHistory}
+            onPress={resetRecommendations}
             style={({ pressed }) => [styles.textButton, { opacity: pressed ? 0.65 : 1 }]}
           >
             <Text style={[styles.textButtonText, { color: colors.primary }]}>

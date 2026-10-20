@@ -101,11 +101,17 @@ page?: number;
 genreIds?: string;
 /**
  * Comma-separated streaming provider IDs selected by the user.
+ * @minLength 1
  * @maxLength 200
  */
-providerIds?: string;
+providerIds: string;
 /**
- * Comma-separated movie IDs already shown, liked, or dismissed.
+ * Up to four movie IDs from the user's watched list to personalize recommendations by title similarity.
+ * @maxLength 100
+ */
+seedMovieIds?: string;
+/**
+ * Comma-separated movie IDs already shown, watched, or dismissed.
  * @maxLength 10000
  */
 excludeIds?: string;

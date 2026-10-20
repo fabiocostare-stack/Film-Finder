@@ -94,6 +94,8 @@ export const getMovieRecommendationsQueryGenreIdsMax = 200;
 
 export const getMovieRecommendationsQueryProviderIdsMax = 200;
 
+export const getMovieRecommendationsQuerySeedMovieIdsMax = 100;
+
 export const getMovieRecommendationsQueryExcludeIdsMax = 10000;
 
 export const getMovieRecommendationsQueryTasteMax = 500;
@@ -104,8 +106,9 @@ export const GetMovieRecommendationsQueryParams = zod.object({
   "region": zod.coerce.string().min(getMovieRecommendationsQueryRegionMin).max(getMovieRecommendationsQueryRegionMax).default(getMovieRecommendationsQueryRegionDefault),
   "page": zod.coerce.number().int().min(1).max(getMovieRecommendationsQueryPageMax).default(getMovieRecommendationsQueryPageDefault),
   "genreIds": zod.coerce.string().max(getMovieRecommendationsQueryGenreIdsMax).optional().describe('Comma-separated movie genre IDs inferred from watched films and the user\'s written taste. Matching uses any listed genre.'),
-  "providerIds": zod.coerce.string().max(getMovieRecommendationsQueryProviderIdsMax).optional().describe('Comma-separated streaming provider IDs selected by the user.'),
-  "excludeIds": zod.coerce.string().max(getMovieRecommendationsQueryExcludeIdsMax).optional().describe('Comma-separated movie IDs already shown, liked, or dismissed.'),
+  "providerIds": zod.coerce.string().min(1).max(getMovieRecommendationsQueryProviderIdsMax).describe('Comma-separated streaming provider IDs selected by the user.'),
+  "seedMovieIds": zod.coerce.string().max(getMovieRecommendationsQuerySeedMovieIdsMax).optional().describe('Up to four movie IDs from the user\'s watched list to personalize recommendations by title similarity.'),
+  "excludeIds": zod.coerce.string().max(getMovieRecommendationsQueryExcludeIdsMax).optional().describe('Comma-separated movie IDs already shown, watched, or dismissed.'),
   "taste": zod.coerce.string().max(getMovieRecommendationsQueryTasteMax).optional().describe('Optional free-text description used as additional preference context.')
 })
 

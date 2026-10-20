@@ -18,6 +18,7 @@ export type MoviePreferences = {
   shownMovieIds: number[];
   dismissedMovieIds: number[];
   selectedProviders: MovieProvider[];
+  platformSetupComplete: boolean;
   taste: string;
   historyRevision: number;
 };
@@ -29,6 +30,7 @@ type PreferencesContextValue = {
   toggleWatchedMovie: (movie: Movie) => void;
   toggleSavedMovie: (movie: Movie) => void;
   toggleProvider: (provider: MovieProvider) => void;
+  completePlatformSetup: () => void;
   saveTaste: (taste: string) => void;
   markShown: (ids: number[]) => void;
   dismissMovie: (movie: Movie) => void;
@@ -41,6 +43,7 @@ const emptyPreferences: MoviePreferences = {
   shownMovieIds: [],
   dismissedMovieIds: [],
   selectedProviders: [],
+  platformSetupComplete: false,
   taste: "",
   historyRevision: 0,
 };
@@ -54,6 +57,9 @@ function restorePreferences(value: unknown): MoviePreferences | null {
 
   const legacyLikes = Array.isArray(candidate.likedMovies)
     ? (candidate.likedMovies as Movie[])
+    : [];
+  const selectedProviders = Array.isArray(candidate.selectedProviders)
+    ? (candidate.selectedProviders as MovieProvider[])
     : [];
 
   return {
@@ -71,9 +77,11 @@ function restorePreferences(value: unknown): MoviePreferences | null {
     dismissedMovieIds: Array.isArray(candidate.dismissedMovieIds)
       ? (candidate.dismissedMovieIds as number[])
       : [],
-    selectedProviders: Array.isArray(candidate.selectedProviders)
-      ? (candidate.selectedProviders as MovieProvider[])
-      : [],
+    selectedProviders,
+    platformSetupComplete:
+      typeof candidate.platformSetupComplete === "boolean"
+        ? candidate.platformSetupComplete
+        : selectedProviders.length > 0,
     taste: candidate.taste,
     historyRevision:
       typeof candidate.historyRevision === "number"
@@ -154,6 +162,13 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const completePlatformSetup = useCallback(() => {
+    setPreferences((current) => ({
+      ...current,
+      platformSetupComplete: current.selectedProviders.length > 0,
+    }));
+  }, []);
+
   const saveTaste = useCallback((taste: string) => {
     setPreferences((current) => ({ ...current, taste }));
   }, []);
@@ -201,6 +216,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       toggleWatchedMovie,
       toggleSavedMovie,
       toggleProvider,
+      completePlatformSetup,
       saveTaste,
       markShown,
       dismissMovie,
@@ -213,6 +229,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       toggleWatchedMovie,
       toggleSavedMovie,
       toggleProvider,
+      completePlatformSetup,
       saveTaste,
       markShown,
       dismissMovie,
