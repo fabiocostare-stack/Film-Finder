@@ -9,6 +9,7 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FilmCard } from "@/components/FilmCard";
 import { usePreferences } from "@/context/PreferencesContext";
+import { useMovieCredits } from "@/hooks/useMovieCredits";
 import { useColors } from "@/hooks/useColors";
 
 export default function LibraryScreen() {
@@ -16,6 +17,10 @@ export default function LibraryScreen() {
   const insets = useSafeAreaInsets();
   const { preferences, toggleWatchedMovie, toggleSavedMovie } = usePreferences();
   const savedIds = new Set(preferences.savedMovies.map((movie) => movie.id));
+  const movieCredits = useMovieCredits([
+    ...preferences.savedMovies.map((movie) => movie.id),
+    ...preferences.watchedMovies.map((movie) => movie.id),
+  ]);
 
   return (
     <ScrollView
@@ -46,6 +51,11 @@ export default function LibraryScreen() {
             <FilmCard
               key={`saved-${movie.id}`}
               movie={movie}
+              credits={movieCredits.creditsByMovieId.get(movie.id)}
+              creditsLoading={
+                movieCredits.isFetching &&
+                !movieCredits.creditsByMovieId.has(movie.id)
+              }
               isWatched={preferences.watchedMovies.some((item) => item.id === movie.id)}
               isSaved={savedIds.has(movie.id)}
               onToggleWatched={toggleWatchedMovie}
@@ -72,6 +82,11 @@ export default function LibraryScreen() {
             <FilmCard
               key={`watched-${movie.id}`}
               movie={movie}
+              credits={movieCredits.creditsByMovieId.get(movie.id)}
+              creditsLoading={
+                movieCredits.isFetching &&
+                !movieCredits.creditsByMovieId.has(movie.id)
+              }
               isWatched
               isSaved={savedIds.has(movie.id)}
               onToggleWatched={toggleWatchedMovie}

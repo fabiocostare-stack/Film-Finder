@@ -10,18 +10,18 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import {
-  getGetMovieCreditsQueryKey,
   getGetMovieAvailabilityQueryKey,
-  useGetMovieCredits,
   useGetMovieAvailability,
-  type GetMovieCreditsParams,
   type GetMovieAvailabilityParams,
   type Movie,
+  type MovieCreditsResponse,
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 
 type FilmCardProps = {
   movie: Movie;
+  credits?: MovieCreditsResponse;
+  creditsLoading?: boolean;
   isWatched: boolean;
   isSaved: boolean;
   onToggleWatched: (movie: Movie) => void;
@@ -35,6 +35,8 @@ function yearOf(date: string): string {
 
 export function FilmCard({
   movie,
+  credits,
+  creditsLoading = false,
   isWatched,
   isSaved,
   onToggleWatched,
@@ -49,15 +51,6 @@ export function FilmCard({
       enabled: showAvailability,
       queryKey: getGetMovieAvailabilityQueryKey(params),
       staleTime: 6 * 60 * 60 * 1000,
-      refetchOnWindowFocus: false,
-      retry: false,
-    },
-  });
-  const creditsParams: GetMovieCreditsParams = { movieId: movie.id };
-  const credits = useGetMovieCredits(creditsParams, {
-    query: {
-      queryKey: getGetMovieCreditsQueryKey(creditsParams),
-      staleTime: 12 * 60 * 60 * 1000,
       refetchOnWindowFocus: false,
       retry: false,
     },
@@ -112,14 +105,14 @@ export function FilmCard({
           {yearOf(movie.releaseDate)}
           {movie.originalLanguage ? ` · ${movie.originalLanguage.toUpperCase()}` : ""}
         </Text>
-        {credits.isLoading ? (
+        {creditsLoading && !credits ? (
           <View style={styles.creditLoading}>
             <ActivityIndicator size="small" color={colors.primary} />
             <Text style={[styles.creditText, { color: colors.mutedForeground }]}>
               Caricamento regia e cast…
             </Text>
           </View>
-        ) : credits.isError ? (
+        ) : !credits ? (
           <Text style={[styles.creditText, styles.credits, { color: colors.mutedForeground }]}>
             Regia e cast non disponibili al momento.
           </Text>
@@ -134,8 +127,8 @@ export function FilmCard({
                 <Text style={[styles.creditLabel, { color: colors.foreground }]}>
                   Regia:{" "}
                 </Text>
-                {credits.data?.directors.length
-                  ? credits.data.directors.join(", ")
+                {credits.directors.length
+                  ? credits.directors.join(", ")
                   : "Non disponibile"}
               </Text>
             </View>
@@ -148,8 +141,8 @@ export function FilmCard({
                 <Text style={[styles.creditLabel, { color: colors.foreground }]}>
                   Cast:{" "}
                 </Text>
-                {credits.data?.cast.length
-                  ? credits.data.cast.join(", ")
+                {credits.cast.length
+                  ? credits.cast.join(", ")
                   : "Non disponibile"}
               </Text>
             </View>

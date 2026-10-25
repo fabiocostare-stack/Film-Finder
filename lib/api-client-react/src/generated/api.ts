@@ -17,11 +17,13 @@ import type {
 
 import type {
   GetMovieAvailabilityParams,
+  GetMovieCreditsBatchParams,
   GetMovieCreditsParams,
   GetMovieRecommendationsParams,
   HealthStatus,
   ListMovieProvidersParams,
   MovieAvailabilityResponse,
+  MovieCreditsBatchResponse,
   MovieCreditsResponse,
   MovieErrorResponse,
   MovieProviderListResponse,
@@ -542,6 +544,90 @@ export function useGetMovieCredits<TData = Awaited<ReturnType<typeof getMovieCre
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetMovieCreditsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetMovieCreditsBatchUrl = (params: GetMovieCreditsBatchParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/movies/credits/batch?${stringifiedParams}` : `/api/movies/credits/batch`
+}
+
+/**
+ * @summary Get director and main cast for multiple movies
+ */
+export const getMovieCreditsBatch = async (params: GetMovieCreditsBatchParams, options?: Parameters<typeof customFetch>[1]): Promise<MovieCreditsBatchResponse> => {
+
+  return customFetch<MovieCreditsBatchResponse>(getGetMovieCreditsBatchUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMovieCreditsBatchQueryKey = (params?: GetMovieCreditsBatchParams,) => {
+    return [
+    `/api/movies/credits/batch`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetMovieCreditsBatchQueryOptions = <TData = Awaited<ReturnType<typeof getMovieCreditsBatch>>, TError = ErrorType<MovieErrorResponse>>(params: GetMovieCreditsBatchParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMovieCreditsBatch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMovieCreditsBatchQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMovieCreditsBatch>>> = ({ signal }) => getMovieCreditsBatch(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMovieCreditsBatch>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMovieCreditsBatchQueryResult = NonNullable<Awaited<ReturnType<typeof getMovieCreditsBatch>>>
+export type GetMovieCreditsBatchQueryError = ErrorType<MovieErrorResponse>
+
+
+/**
+ * @summary Get director and main cast for multiple movies
+ */
+
+export function useGetMovieCreditsBatch<TData = Awaited<ReturnType<typeof getMovieCreditsBatch>>, TError = ErrorType<MovieErrorResponse>>(
+ params: GetMovieCreditsBatchParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMovieCreditsBatch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMovieCreditsBatchQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

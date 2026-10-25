@@ -1,6 +1,8 @@
 import {
   GetMovieAvailabilityQueryParams,
   GetMovieAvailabilityResponse,
+  GetMovieCreditsBatchQueryParams,
+  GetMovieCreditsBatchResponse,
   GetMovieCreditsQueryParams,
   GetMovieCreditsResponse,
   GetMovieRecommendationsQueryParams,
@@ -802,6 +804,65 @@ router.get("/movies/recommendations", async (req, res): Promise<void> => {
   }
 });
 
+async function loadMovieCredits(movieId: number) {
+  const credits = await getTmdb<TmdbCredits>(
+    `/movie/${movieId}/credits`,
+    { language: "it-IT" },
+    12 * 60 * 60 * 1000,
+  );
+  const directors = [
+    ...new Set(
+      (credits.crew ?? [])
+        .filter((person) => person.job === "Director")
+        .map((person) => person.name?.trim())
+        .filter((name): name is string => Boolean(name)),
+    ),
+  ].slice(0, 2);
+  const cast = (credits.cast ?? [])
+    .slice()
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+    .map((person) => person.name?.trim())
+    .filter((name): name is string => Boolean(name))
+    .slice(0, 5);
+
+  return GetMovieCreditsResponse.parse({ movieId, directors, cast });
+}
+
+router.get("/movies/credits/batch", async (req, res): Promise<void> => {
+  const parsed = GetMovieCreditsBatchQueryParams.safeParse(req.query);
+  const rawMovieIds = parsed.success
+    ? parsed.data.movieIds.split(",").map((value) => Number(value.trim()))
+    : [];
+  if (
+    !parsed.success ||
+    rawMovieIds.length === 0 ||
+    rawMovieIds.length > 20 ||
+    rawMovieIds.some((movieId) => !Number.isSafeInteger(movieId) || movieId < 1)
+  ) {
+    res.status(400).json({
+      error: "Inserisci da 1 a 20 ID film validi.",
+      code: "invalid_movie_ids",
+    } satisfies MovieErrorResponse);
+    return;
+  }
+
+  try {
+    const movieIds = [...new Set(rawMovieIds)];
+    const results: Awaited<ReturnType<typeof loadMovieCredits>>[] = [];
+    for (let index = 0; index < movieIds.length; index += 6) {
+      const batch = await Promise.all(
+        movieIds
+          .slice(index, index + 6)
+          .map((movieId) => loadMovieCredits(movieId)),
+      );
+      results.push(...batch);
+    }
+    res.json(GetMovieCreditsBatchResponse.parse({ results }));
+  } catch (error) {
+    respondWithError(req, res, error);
+  }
+});
+
 router.get("/movies/credits", async (req, res): Promise<void> => {
   const parsed = GetMovieCreditsQueryParams.safeParse(req.query);
   if (!parsed.success) {
@@ -813,33 +874,7 @@ router.get("/movies/credits", async (req, res): Promise<void> => {
   }
 
   try {
-    const credits = await getTmdb<TmdbCredits>(
-      `/movie/${parsed.data.movieId}/credits`,
-      { language: "it-IT" },
-      12 * 60 * 60 * 1000,
-    );
-    const directors = [
-      ...new Set(
-        (credits.crew ?? [])
-          .filter((person) => person.job === "Director")
-          .map((person) => person.name?.trim())
-          .filter((name): name is string => Boolean(name)),
-      ),
-    ].slice(0, 2);
-    const cast = (credits.cast ?? [])
-      .slice()
-      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
-      .map((person) => person.name?.trim())
-      .filter((name): name is string => Boolean(name))
-      .slice(0, 5);
-
-    res.json(
-      GetMovieCreditsResponse.parse({
-        movieId: parsed.data.movieId,
-        directors,
-        cast,
-      }),
-    );
+    res.json(await loadMovieCredits(parsed.data.movieId));
   } catch (error) {
     respondWithError(req, res, error);
   }

@@ -238,6 +238,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MovieErrorResponse"
+  /movies/credits/batch:
+    get:
+      operationId: getMovieCreditsBatch
+      tags: [movies]
+      summary: Get director and main cast for multiple movies
+      parameters:
+        - name: movieIds
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+          description: Comma-separated movie IDs, up to 20 titles
+      responses:
+        "200":
+          description: Credits for the requested movies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieCreditsBatchResponse"
+        "400":
+          description: Invalid movie IDs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieErrorResponse"
+        "503":
+          description: Movie catalog is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -364,6 +397,15 @@ components:
           type: array
           items:
             type: string
+    MovieCreditsBatchResponse:
+      type: object
+      required:
+        - results
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/MovieCreditsResponse"
     MovieErrorResponse:
       type: object
       required:

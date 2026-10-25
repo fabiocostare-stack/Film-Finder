@@ -25,6 +25,7 @@ import {
   getCatalogErrorMessage,
 } from "@/components/CatalogNotice";
 import { useColors } from "@/hooks/useColors";
+import { useMovieCredits } from "@/hooks/useMovieCredits";
 import { usePreferences } from "@/context/PreferencesContext";
 
 const MAX_VISIBLE_MOVIES = 30;
@@ -186,6 +187,7 @@ export default function HomeScreen() {
       retry: false,
     },
   });
+  const movieCredits = useMovieCredits(feedMovies.map((movie) => movie.id));
 
   useEffect(() => {
     const response = recommendations.data;
@@ -245,6 +247,7 @@ export default function HomeScreen() {
 
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (feedMoviesRef.current.length === 0) return;
       const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
       if (
         contentOffset.y + layoutMeasurement.height >=
@@ -437,6 +440,11 @@ export default function HomeScreen() {
             <FilmCard
               key={movie.id}
               movie={movie}
+              credits={movieCredits.creditsByMovieId.get(movie.id)}
+              creditsLoading={
+                movieCredits.isFetching &&
+                !movieCredits.creditsByMovieId.has(movie.id)
+              }
               isWatched={preferences.watchedMovies.some((item) => item.id === movie.id)}
               isSaved={preferences.savedMovies.some((item) => item.id === movie.id)}
               onToggleWatched={toggleWatchedMovie}

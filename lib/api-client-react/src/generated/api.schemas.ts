@@ -58,6 +58,10 @@ export interface MovieCreditsResponse {
   cast: string[];
 }
 
+export interface MovieCreditsBatchResponse {
+  results: MovieCreditsResponse[];
+}
+
 export interface MovieErrorResponse {
   error: string;
   code: string;
@@ -145,5 +149,14 @@ export type GetMovieCreditsParams = {
  * @minimum 1
  */
 movieId: number;
+};
+
+export type GetMovieCreditsBatchParams = {
+/**
+ * Comma-separated movie IDs, up to 20 titles
+ * @minLength 1
+ * @maxLength 200
+ */
+movieIds: string;
 };
 

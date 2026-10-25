@@ -176,3 +176,23 @@ export const GetMovieCreditsResponse = zod.object({
 })
 
 
+/**
+ * @summary Get director and main cast for multiple movies
+ */
+export const getMovieCreditsBatchQueryMovieIdsMax = 200;
+
+
+
+export const GetMovieCreditsBatchQueryParams = zod.object({
+  "movieIds": zod.coerce.string().min(1).max(getMovieCreditsBatchQueryMovieIdsMax).describe('Comma-separated movie IDs, up to 20 titles')
+})
+
+export const GetMovieCreditsBatchResponse = zod.object({
+  "results": zod.array(zod.object({
+  "movieId": zod.number().int(),
+  "directors": zod.array(zod.string()),
+  "cast": zod.array(zod.string())
+}))
+})
+
+

@@ -24,6 +24,7 @@ import {
 } from "@/components/CatalogNotice";
 import { FilmCard } from "@/components/FilmCard";
 import { usePreferences } from "@/context/PreferencesContext";
+import { useMovieCredits } from "@/hooks/useMovieCredits";
 import { useColors } from "@/hooks/useColors";
 
 export default function SearchScreen() {
@@ -46,6 +47,9 @@ export default function SearchScreen() {
       retry: false,
     },
   });
+  const movieCredits = useMovieCredits(
+    search.data?.results.map((movie) => movie.id) ?? [],
+  );
 
   const submit = () => {
     const query = draft.trim();
@@ -149,6 +153,11 @@ export default function SearchScreen() {
               <FilmCard
                 key={movie.id}
                 movie={movie}
+                credits={movieCredits.creditsByMovieId.get(movie.id)}
+                creditsLoading={
+                  movieCredits.isFetching &&
+                  !movieCredits.creditsByMovieId.has(movie.id)
+                }
                 isWatched={preferences.watchedMovies.some((item) => item.id === movie.id)}
                 isSaved={preferences.savedMovies.some((item) => item.id === movie.id)}
                 onToggleWatched={toggleWatchedMovie}
