@@ -1,4 +1,6 @@
 import {
+  GetDirectorDiscoveriesQueryParams,
+  GetDirectorDiscoveriesResponse,
   GetMovieAvailabilityQueryParams,
   GetMovieAvailabilityResponse,
   GetMovieCreditsBatchQueryParams,
@@ -12,6 +14,8 @@ import {
   MovieErrorResponse,
   SearchMoviesQueryParams,
   SearchMoviesResponse,
+  type DirectorProfile,
+  type DirectorRecommendation,
   type Movie,
   type MovieProvider,
 } from "@workspace/api-zod";
@@ -46,6 +50,7 @@ type TmdbProvider = {
 type TmdbCreditPerson = {
   id: number;
   name?: string;
+  profile_path?: string | null;
   order?: number;
   job?: string;
 };
@@ -58,6 +63,15 @@ type TmdbCredits = {
 type TmdbMovieDetails = TmdbMovie & {
   runtime?: number | null;
   credits?: TmdbCredits;
+};
+
+type TmdbPersonDetails = {
+  name?: string;
+  profile_path?: string | null;
+};
+
+type TmdbPersonMovieCredits = {
+  crew?: Array<TmdbMovie & { job?: string }>;
 };
 
 type TmdbList<T> = {
@@ -402,6 +416,111 @@ async function getAvailableSimilarMovies(
   }
 
   return available;
+}
+
+type DirectorCandidate = {
+  id: number;
+  source: DirectorRecommendation["source"];
+  profile?: DirectorProfile;
+};
+
+async function loadDirectorPicks(
+  candidates: DirectorCandidate[],
+  region: string,
+  providerIds: number[],
+  excludeMovieIds: number[],
+): Promise<DirectorRecommendation[]> {
+  const hydrated = await Promise.all(
+    candidates.map(async (candidate) => {
+      const [personResult, movieCreditsResult] = await Promise.allSettled([
+        candidate.profile
+          ? Promise.resolve(null)
+          : getTmdb<TmdbPersonDetails>(
+              `/person/${candidate.id}`,
+              { language: "it-IT" },
+              12 * 60 * 60 * 1000,
+            ),
+        getTmdb<TmdbPersonMovieCredits>(
+          `/person/${candidate.id}/movie_credits`,
+          { language: "it-IT" },
+          12 * 60 * 60 * 1000,
+        ),
+      ]);
+
+      const person =
+        personResult.status === "fulfilled" ? personResult.value : null;
+      const director =
+        candidate.profile ??
+        (person?.name?.trim()
+          ? {
+              id: candidate.id,
+              name: person.name.trim(),
+              profilePath: person.profile_path ?? null,
+            }
+          : null);
+      if (!director || movieCreditsResult.status !== "fulfilled") return null;
+
+      const uniqueMovies = new Map<number, TmdbMovie>();
+      for (const movie of movieCreditsResult.value.crew ?? []) {
+        if (
+          movie.job === "Director" &&
+          (movie.vote_average ?? 0) >= 7 &&
+          (movie.vote_count ?? 0) >= 100
+        ) {
+          uniqueMovies.set(movie.id, movie);
+        }
+      }
+
+      const movies = [...uniqueMovies.values()]
+        .sort(
+          (a, b) =>
+            (b.vote_average ?? 0) - (a.vote_average ?? 0) ||
+            (b.vote_count ?? 0) - (a.vote_count ?? 0),
+        )
+        .map((movie, index) => ({
+          movie,
+          matchedSeeds: 0,
+          rankScore: 1 / (index + 1),
+        }));
+
+      return { director, source: candidate.source, movies };
+    }),
+  );
+
+  const selectedMovieIds = new Set(excludeMovieIds);
+  const picks: DirectorRecommendation[] = [];
+  for (const item of hydrated) {
+    if (!item) continue;
+    const checkedIds = new Set<number>();
+    let available = await getAvailableSimilarMovies(
+      item.movies,
+      region,
+      providerIds,
+      [...selectedMovieIds],
+      7,
+      100,
+      8,
+      checkedIds,
+    );
+    if (available.length < 2) {
+      const additional = await getAvailableSimilarMovies(
+        item.movies,
+        region,
+        providerIds,
+        [...selectedMovieIds],
+        7,
+        100,
+        16,
+        checkedIds,
+      );
+      available = [...available, ...additional];
+    }
+
+    const movies = available.slice(0, 2).map(({ movie }) => mapMovie(movie));
+    movies.forEach((movie) => selectedMovieIds.add(movie.id));
+    picks.push({ director: item.director, source: item.source, movies });
+  }
+  return picks;
 }
 
 async function getTmdb<T>(
@@ -803,6 +922,135 @@ router.get("/movies/recommendations", async (req, res): Promise<void> => {
           totalResults,
         },
       ),
+    );
+  } catch (error) {
+    respondWithError(req, res, error);
+  }
+});
+
+router.get("/movies/director-discoveries", async (req, res): Promise<void> => {
+  const parsed = GetDirectorDiscoveriesQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "Le preferenze per i registi non sono valide.",
+      code: "invalid_director_discoveries",
+    } satisfies MovieErrorResponse);
+    return;
+  }
+
+  const region = (parsed.data.region ?? "IT").toUpperCase();
+  const providerIds = parseIds(parsed.data.providerIds);
+  if (providerIds.length === 0) {
+    res.status(400).json({
+      error: "Seleziona almeno una piattaforma per scoprire i registi.",
+      code: "streaming_provider_required",
+    } satisfies MovieErrorResponse);
+    return;
+  }
+
+  const watchedMovieIds = parseIds(parsed.data.watchedMovieIds);
+  const followedDirectorIds = parseIds(parsed.data.followedDirectorIds).slice(0, 4);
+  const excludedMovieIds = [
+    ...new Set([
+      ...watchedMovieIds,
+      ...parseIds(parsed.data.excludeMovieIds),
+    ]),
+  ];
+  const discoverParams: Record<string, string | number> = {
+    language: "it-IT",
+    region,
+    watch_region: region,
+    include_adult: "false",
+    sort_by: "vote_average.desc",
+    "vote_average.gte": 7,
+    "vote_count.gte": 300,
+    with_watch_providers: providerIds.join("|"),
+    with_watch_monetization_types: "flatrate|free|ads",
+  };
+
+  try {
+    const [watchedPeople, popularMovies] = await Promise.all([
+      getWatchedPeople(watchedMovieIds.slice(0, 4)),
+      getTmdb<TmdbList<TmdbMovie>>(
+        "/discover/movie",
+        { ...discoverParams, page: 1 },
+        30 * 60 * 1000,
+      ),
+    ]);
+
+    const personalizedCandidates: DirectorCandidate[] = [];
+    const usedDirectorIds = new Set<number>();
+    for (const id of followedDirectorIds) {
+      if (usedDirectorIds.has(id)) continue;
+      usedDirectorIds.add(id);
+      personalizedCandidates.push({ id, source: "followed" });
+    }
+    for (const id of watchedPeople.directorIds) {
+      if (personalizedCandidates.length >= 4) break;
+      if (usedDirectorIds.has(id)) continue;
+      usedDirectorIds.add(id);
+      personalizedCandidates.push({ id, source: "watched" });
+    }
+
+    const popularDirectorProfiles = new Map<number, DirectorProfile>();
+    const popularMovieCandidates = (popularMovies.results ?? []).slice(0, 12);
+    for (let offset = 0; offset < popularMovieCandidates.length; offset += 4) {
+      const movieBatch = popularMovieCandidates.slice(offset, offset + 4);
+      const creditResponses = await Promise.allSettled(
+        movieBatch.map((movie) =>
+          getTmdb<TmdbCredits>(
+            `/movie/${movie.id}/credits`,
+            { language: "it-IT" },
+            12 * 60 * 60 * 1000,
+          ),
+        ),
+      );
+      creditResponses.forEach((response) => {
+        if (response.status !== "fulfilled") return;
+        for (const person of response.value.crew ?? []) {
+          if (
+            person.job !== "Director" ||
+            !person.name?.trim() ||
+            usedDirectorIds.has(person.id) ||
+            popularDirectorProfiles.has(person.id)
+          ) {
+            continue;
+          }
+          popularDirectorProfiles.set(person.id, {
+            id: person.id,
+            name: person.name.trim(),
+            profilePath: person.profile_path ?? null,
+          });
+        }
+      });
+      if (popularDirectorProfiles.size >= 6) break;
+    }
+
+    const discoverCandidates: DirectorCandidate[] = [
+      ...popularDirectorProfiles.values(),
+    ]
+      .slice(0, 4)
+      .map((profile) => ({
+        id: profile.id,
+        source: "popular" as const,
+        profile,
+      }));
+
+    const picks = await loadDirectorPicks(
+      [...personalizedCandidates, ...discoverCandidates],
+      region,
+      providerIds,
+      excludedMovieIds,
+    );
+    res.json(
+      GetDirectorDiscoveriesResponse.parse({
+        personalized: picks.filter(
+          (pick) => pick.source !== "popular" && (pick.source === "followed" || pick.movies.length > 0),
+        ),
+        discover: picks.filter(
+          (pick) => pick.source === "popular" && pick.movies.length > 0,
+        ),
+      }),
     );
   } catch (error) {
     respondWithError(req, res, error);

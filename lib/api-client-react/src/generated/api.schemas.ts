@@ -64,6 +64,33 @@ export interface MovieCreditsBatchResponse {
   results: MovieCreditsResponse[];
 }
 
+export interface DirectorProfile {
+  id: number;
+  name: string;
+  /** @nullable */
+  profilePath: string | null;
+}
+
+export type DirectorRecommendationSource = typeof DirectorRecommendationSource[keyof typeof DirectorRecommendationSource];
+
+
+export const DirectorRecommendationSource = {
+  followed: 'followed',
+  watched: 'watched',
+  popular: 'popular',
+} as const;
+
+export interface DirectorRecommendation {
+  director: DirectorProfile;
+  source: DirectorRecommendationSource;
+  movies: Movie[];
+}
+
+export interface DirectorDiscoveriesResponse {
+  personalized: DirectorRecommendation[];
+  discover: DirectorRecommendation[];
+}
+
 export interface MovieErrorResponse {
   error: string;
   code: string;
@@ -160,5 +187,34 @@ export type GetMovieCreditsBatchParams = {
  * @maxLength 200
  */
 movieIds: string;
+};
+
+export type GetDirectorDiscoveriesParams = {
+/**
+ * @minLength 2
+ * @maxLength 2
+ */
+region?: string;
+/**
+ * Comma-separated streaming provider IDs selected by the user.
+ * @minLength 1
+ * @maxLength 200
+ */
+providerIds: string;
+/**
+ * Comma-separated watched movie IDs used to discover directors and exclude watched films.
+ * @maxLength 2000
+ */
+watchedMovieIds?: string;
+/**
+ * Comma-separated director IDs explicitly followed by the user.
+ * @maxLength 500
+ */
+followedDirectorIds?: string;
+/**
+ * Comma-separated movie IDs dismissed from the recommendation feed.
+ * @maxLength 4000
+ */
+excludeMovieIds?: string;
 };
 

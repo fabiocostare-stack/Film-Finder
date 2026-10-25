@@ -16,6 +16,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  DirectorDiscoveriesResponse,
+  GetDirectorDiscoveriesParams,
   GetMovieAvailabilityParams,
   GetMovieCreditsBatchParams,
   GetMovieCreditsParams,
@@ -628,6 +630,90 @@ export function useGetMovieCreditsBatch<TData = Awaited<ReturnType<typeof getMov
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetMovieCreditsBatchQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetDirectorDiscoveriesUrl = (params: GetDirectorDiscoveriesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/movies/director-discoveries?${stringifiedParams}` : `/api/movies/director-discoveries`
+}
+
+/**
+ * @summary Recommend directors and highly rated films available on selected services
+ */
+export const getDirectorDiscoveries = async (params: GetDirectorDiscoveriesParams, options?: Parameters<typeof customFetch>[1]): Promise<DirectorDiscoveriesResponse> => {
+
+  return customFetch<DirectorDiscoveriesResponse>(getGetDirectorDiscoveriesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDirectorDiscoveriesQueryKey = (params?: GetDirectorDiscoveriesParams,) => {
+    return [
+    `/api/movies/director-discoveries`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDirectorDiscoveriesQueryOptions = <TData = Awaited<ReturnType<typeof getDirectorDiscoveries>>, TError = ErrorType<MovieErrorResponse>>(params: GetDirectorDiscoveriesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDirectorDiscoveries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDirectorDiscoveriesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDirectorDiscoveries>>> = ({ signal }) => getDirectorDiscoveries(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDirectorDiscoveries>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDirectorDiscoveriesQueryResult = NonNullable<Awaited<ReturnType<typeof getDirectorDiscoveries>>>
+export type GetDirectorDiscoveriesQueryError = ErrorType<MovieErrorResponse>
+
+
+/**
+ * @summary Recommend directors and highly rated films available on selected services
+ */
+
+export function useGetDirectorDiscoveries<TData = Awaited<ReturnType<typeof getDirectorDiscoveries>>, TError = ErrorType<MovieErrorResponse>>(
+ params: GetDirectorDiscoveriesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDirectorDiscoveries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDirectorDiscoveriesQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

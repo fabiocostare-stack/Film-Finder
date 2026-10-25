@@ -6,6 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './directorDiscoveriesResponse';
+export * from './directorProfile';
+export * from './directorRecommendation';
+export * from './directorRecommendationSource';
+export * from './getDirectorDiscoveriesParams';
 export * from './getMovieAvailabilityParams';
 export * from './getMovieCreditsBatchParams';
 export * from './getMovieCreditsParams';

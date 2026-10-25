@@ -271,6 +271,64 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MovieErrorResponse"
+  /movies/director-discoveries:
+    get:
+      operationId: getDirectorDiscoveries
+      tags: [movies]
+      summary: Recommend directors and highly rated films available on selected services
+      parameters:
+        - name: region
+          in: query
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 2
+            default: IT
+        - name: providerIds
+          in: query
+          required: true
+          description: Comma-separated streaming provider IDs selected by the user.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: watchedMovieIds
+          in: query
+          description: Comma-separated watched movie IDs used to discover directors and exclude watched films.
+          schema:
+            type: string
+            maxLength: 2000
+        - name: followedDirectorIds
+          in: query
+          description: Comma-separated director IDs explicitly followed by the user.
+          schema:
+            type: string
+            maxLength: 500
+        - name: excludeMovieIds
+          in: query
+          description: Comma-separated movie IDs dismissed from the recommendation feed.
+          schema:
+            type: string
+            maxLength: 4000
+      responses:
+        "200":
+          description: Personalized and popular directors with available film picks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DirectorDiscoveriesResponse"
+        "400":
+          description: Invalid director discovery parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieErrorResponse"
+        "503":
+          description: Movie catalog is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -409,6 +467,49 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/MovieCreditsResponse"
+    DirectorProfile:
+      type: object
+      required:
+        - id
+        - name
+        - profilePath
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        profilePath:
+          type: [string, "null"]
+    DirectorRecommendation:
+      type: object
+      required:
+        - director
+        - source
+        - movies
+      properties:
+        director:
+          $ref: "#/components/schemas/DirectorProfile"
+        source:
+          type: string
+          enum: [followed, watched, popular]
+        movies:
+          type: array
+          items:
+            $ref: "#/components/schemas/Movie"
+    DirectorDiscoveriesResponse:
+      type: object
+      required:
+        - personalized
+        - discover
+      properties:
+        personalized:
+          type: array
+          items:
+            $ref: "#/components/schemas/DirectorRecommendation"
+        discover:
+          type: array
+          items:
+            $ref: "#/components/schemas/DirectorRecommendation"
     MovieErrorResponse:
       type: object
       required:

@@ -198,3 +198,72 @@ export const GetMovieCreditsBatchResponse = zod.object({
 })
 
 
+/**
+ * @summary Recommend directors and highly rated films available on selected services
+ */
+export const getDirectorDiscoveriesQueryRegionDefault = `IT`;
+export const getDirectorDiscoveriesQueryRegionMin = 2;
+export const getDirectorDiscoveriesQueryRegionMax = 2;
+
+export const getDirectorDiscoveriesQueryProviderIdsMax = 200;
+
+export const getDirectorDiscoveriesQueryWatchedMovieIdsMax = 2000;
+
+export const getDirectorDiscoveriesQueryFollowedDirectorIdsMax = 500;
+
+export const getDirectorDiscoveriesQueryExcludeMovieIdsMax = 4000;
+
+
+
+export const GetDirectorDiscoveriesQueryParams = zod.object({
+  "region": zod.coerce.string().min(getDirectorDiscoveriesQueryRegionMin).max(getDirectorDiscoveriesQueryRegionMax).default(getDirectorDiscoveriesQueryRegionDefault),
+  "providerIds": zod.coerce.string().min(1).max(getDirectorDiscoveriesQueryProviderIdsMax).describe('Comma-separated streaming provider IDs selected by the user.'),
+  "watchedMovieIds": zod.coerce.string().max(getDirectorDiscoveriesQueryWatchedMovieIdsMax).optional().describe('Comma-separated watched movie IDs used to discover directors and exclude watched films.'),
+  "followedDirectorIds": zod.coerce.string().max(getDirectorDiscoveriesQueryFollowedDirectorIdsMax).optional().describe('Comma-separated director IDs explicitly followed by the user.'),
+  "excludeMovieIds": zod.coerce.string().max(getDirectorDiscoveriesQueryExcludeMovieIdsMax).optional().describe('Comma-separated movie IDs dismissed from the recommendation feed.')
+})
+
+export const GetDirectorDiscoveriesResponse = zod.object({
+  "personalized": zod.array(zod.object({
+  "director": zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "profilePath": zod.string().nullable()
+}),
+  "source": zod.enum(['followed', 'watched', 'popular']),
+  "movies": zod.array(zod.object({
+  "id": zod.number().int(),
+  "title": zod.string(),
+  "originalTitle": zod.string(),
+  "overview": zod.string(),
+  "posterPath": zod.string().nullable(),
+  "backdropPath": zod.string().nullable(),
+  "releaseDate": zod.string(),
+  "voteAverage": zod.number(),
+  "genreIds": zod.array(zod.number().int()),
+  "originalLanguage": zod.string()
+}))
+})),
+  "discover": zod.array(zod.object({
+  "director": zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "profilePath": zod.string().nullable()
+}),
+  "source": zod.enum(['followed', 'watched', 'popular']),
+  "movies": zod.array(zod.object({
+  "id": zod.number().int(),
+  "title": zod.string(),
+  "originalTitle": zod.string(),
+  "overview": zod.string(),
+  "posterPath": zod.string().nullable(),
+  "backdropPath": zod.string().nullable(),
+  "releaseDate": zod.string(),
+  "voteAverage": zod.number(),
+  "genreIds": zod.array(zod.number().int()),
+  "originalLanguage": zod.string()
+}))
+}))
+})
+
+
