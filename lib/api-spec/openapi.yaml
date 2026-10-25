@@ -207,6 +207,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MovieErrorResponse"
+  /movies/credits:
+    get:
+      operationId: getMovieCredits
+      tags: [movies]
+      summary: Get a movie's director and main cast
+      parameters:
+        - name: movieId
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Director and principal cast credits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieCreditsResponse"
+        "400":
+          description: Invalid movie ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieErrorResponse"
+        "503":
+          description: Movie catalog is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovieErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -316,6 +347,23 @@ components:
             $ref: "#/components/schemas/MovieProvider"
         link:
           type: [string, "null"]
+    MovieCreditsResponse:
+      type: object
+      required:
+        - movieId
+        - directors
+        - cast
+      properties:
+        movieId:
+          type: integer
+        directors:
+          type: array
+          items:
+            type: string
+        cast:
+          type: array
+          items:
+            type: string
     MovieErrorResponse:
       type: object
       required:

@@ -52,6 +52,12 @@ export interface MovieAvailabilityResponse {
   link: string | null;
 }
 
+export interface MovieCreditsResponse {
+  movieId: number;
+  directors: string[];
+  cast: string[];
+}
+
 export interface MovieErrorResponse {
   error: string;
   code: string;
@@ -132,5 +138,12 @@ movieId: number;
  * @maxLength 2
  */
 region?: string;
+};
+
+export type GetMovieCreditsParams = {
+/**
+ * @minimum 1
+ */
+movieId: number;
 };
 

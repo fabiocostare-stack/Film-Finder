@@ -17,10 +17,12 @@ import type {
 
 import type {
   GetMovieAvailabilityParams,
+  GetMovieCreditsParams,
   GetMovieRecommendationsParams,
   HealthStatus,
   ListMovieProvidersParams,
   MovieAvailabilityResponse,
+  MovieCreditsResponse,
   MovieErrorResponse,
   MovieProviderListResponse,
   MovieSearchResponse,
@@ -316,7 +318,7 @@ export const getGetMovieRecommendationsUrl = (params: GetMovieRecommendationsPar
 }
 
 /**
- * @summary Recommend films based on taste, watched genres, and streaming services
+ * @summary Recommend highly rated films matching selected streaming services and watched titles
  */
 export const getMovieRecommendations = async (params: GetMovieRecommendationsParams, options?: Parameters<typeof customFetch>[1]): Promise<MovieSearchResponse> => {
 
@@ -363,7 +365,7 @@ export type GetMovieRecommendationsQueryError = ErrorType<MovieErrorResponse>
 
 
 /**
- * @summary Recommend films based on taste, watched genres, and streaming services
+ * @summary Recommend highly rated films matching selected streaming services and watched titles
  */
 
 export function useGetMovieRecommendations<TData = Awaited<ReturnType<typeof getMovieRecommendations>>, TError = ErrorType<MovieErrorResponse>>(
@@ -456,6 +458,90 @@ export function useGetMovieAvailability<TData = Awaited<ReturnType<typeof getMov
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetMovieAvailabilityQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetMovieCreditsUrl = (params: GetMovieCreditsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/movies/credits?${stringifiedParams}` : `/api/movies/credits`
+}
+
+/**
+ * @summary Get a movie's director and main cast
+ */
+export const getMovieCredits = async (params: GetMovieCreditsParams, options?: Parameters<typeof customFetch>[1]): Promise<MovieCreditsResponse> => {
+
+  return customFetch<MovieCreditsResponse>(getGetMovieCreditsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMovieCreditsQueryKey = (params?: GetMovieCreditsParams,) => {
+    return [
+    `/api/movies/credits`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetMovieCreditsQueryOptions = <TData = Awaited<ReturnType<typeof getMovieCredits>>, TError = ErrorType<MovieErrorResponse>>(params: GetMovieCreditsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMovieCredits>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMovieCreditsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMovieCredits>>> = ({ signal }) => getMovieCredits(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMovieCredits>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMovieCreditsQueryResult = NonNullable<Awaited<ReturnType<typeof getMovieCredits>>>
+export type GetMovieCreditsQueryError = ErrorType<MovieErrorResponse>
+
+
+/**
+ * @summary Get a movie's director and main cast
+ */
+
+export function useGetMovieCredits<TData = Awaited<ReturnType<typeof getMovieCredits>>, TError = ErrorType<MovieErrorResponse>>(
+ params: GetMovieCreditsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMovieCredits>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMovieCreditsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

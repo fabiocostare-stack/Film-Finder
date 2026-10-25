@@ -7,11 +7,13 @@
  */
 
 export * from './getMovieAvailabilityParams';
+export * from './getMovieCreditsParams';
 export * from './getMovieRecommendationsParams';
 export * from './healthStatus';
 export * from './listMovieProvidersParams';
 export * from './movie';
 export * from './movieAvailabilityResponse';
+export * from './movieCreditsResponse';
 export * from './movieErrorResponse';
 export * from './movieProvider';
 export * from './movieProviderListResponse';

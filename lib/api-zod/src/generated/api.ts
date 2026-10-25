@@ -81,7 +81,7 @@ export const ListMovieProvidersResponse = zod.object({
 
 
 /**
- * @summary Recommend films based on taste, watched genres, and streaming services
+ * @summary Recommend highly rated films matching selected streaming services and watched titles
  */
 export const getMovieRecommendationsQueryRegionDefault = `IT`;
 export const getMovieRecommendationsQueryRegionMin = 2;
@@ -156,6 +156,23 @@ export const GetMovieAvailabilityResponse = zod.object({
   "displayPriority": zod.number().int()
 })),
   "link": zod.string().nullable()
+})
+
+
+/**
+ * @summary Get a movie's director and main cast
+ */
+
+
+
+export const GetMovieCreditsQueryParams = zod.object({
+  "movieId": zod.coerce.number().int().min(1)
+})
+
+export const GetMovieCreditsResponse = zod.object({
+  "movieId": zod.number().int(),
+  "directors": zod.array(zod.string()),
+  "cast": zod.array(zod.string())
 })
 
 

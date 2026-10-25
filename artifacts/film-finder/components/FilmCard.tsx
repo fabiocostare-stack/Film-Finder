@@ -10,8 +10,11 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import {
+  getGetMovieCreditsQueryKey,
   getGetMovieAvailabilityQueryKey,
+  useGetMovieCredits,
   useGetMovieAvailability,
+  type GetMovieCreditsParams,
   type GetMovieAvailabilityParams,
   type Movie,
 } from "@workspace/api-client-react";
@@ -46,6 +49,15 @@ export function FilmCard({
       enabled: showAvailability,
       queryKey: getGetMovieAvailabilityQueryKey(params),
       staleTime: 6 * 60 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      retry: false,
+    },
+  });
+  const creditsParams: GetMovieCreditsParams = { movieId: movie.id };
+  const credits = useGetMovieCredits(creditsParams, {
+    query: {
+      queryKey: getGetMovieCreditsQueryKey(creditsParams),
+      staleTime: 12 * 60 * 60 * 1000,
       refetchOnWindowFocus: false,
       retry: false,
     },
@@ -100,17 +112,48 @@ export function FilmCard({
           {yearOf(movie.releaseDate)}
           {movie.originalLanguage ? ` · ${movie.originalLanguage.toUpperCase()}` : ""}
         </Text>
-        {movie.overview ? (
-          <Text
-            numberOfLines={3}
-            style={[styles.overview, { color: colors.mutedForeground }]}
-          >
-            {movie.overview}
+        {credits.isLoading ? (
+          <View style={styles.creditLoading}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[styles.creditText, { color: colors.mutedForeground }]}>
+              Caricamento regia e cast…
+            </Text>
+          </View>
+        ) : credits.isError ? (
+          <Text style={[styles.creditText, styles.credits, { color: colors.mutedForeground }]}>
+            Regia e cast non disponibili al momento.
           </Text>
         ) : (
-          <Text style={[styles.overview, { color: colors.mutedForeground }]}>
-            La trama non è disponibile.
-          </Text>
+          <View style={styles.credits}>
+            <View style={styles.creditRow}>
+              <Feather name="video" size={12} color={colors.primary} />
+              <Text
+                numberOfLines={1}
+                style={[styles.creditText, { color: colors.mutedForeground }]}
+              >
+                <Text style={[styles.creditLabel, { color: colors.foreground }]}>
+                  Regia:{" "}
+                </Text>
+                {credits.data?.directors.length
+                  ? credits.data.directors.join(", ")
+                  : "Non disponibile"}
+              </Text>
+            </View>
+            <View style={styles.creditRow}>
+              <Feather name="users" size={12} color={colors.primary} />
+              <Text
+                numberOfLines={2}
+                style={[styles.creditText, { color: colors.mutedForeground }]}
+              >
+                <Text style={[styles.creditLabel, { color: colors.foreground }]}>
+                  Cast:{" "}
+                </Text>
+                {credits.data?.cast.length
+                  ? credits.data.cast.join(", ")
+                  : "Non disponibile"}
+              </Text>
+            </View>
+          </View>
         )}
 
         <View style={styles.actions}>
@@ -262,7 +305,17 @@ const styles = StyleSheet.create({
   rating: { flexDirection: "row", alignItems: "center", gap: 3, paddingTop: 2 },
   ratingText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
   meta: { marginTop: 5, fontSize: 9, letterSpacing: 0.4 },
-  overview: { marginTop: 8, fontSize: 10, lineHeight: 15 },
+  credits: { marginTop: 8, gap: 5 },
+  creditRow: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
+  creditText: { flex: 1, fontSize: 10, lineHeight: 14 },
+  creditLabel: { fontFamily: "Inter_600SemiBold" },
+  creditLoading: {
+    marginTop: 8,
+    minHeight: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
   actions: {
     marginTop: "auto",
     paddingTop: 8,

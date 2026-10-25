@@ -1,6 +1,8 @@
 import {
   GetMovieAvailabilityQueryParams,
   GetMovieAvailabilityResponse,
+  GetMovieCreditsQueryParams,
+  GetMovieCreditsResponse,
   GetMovieRecommendationsQueryParams,
   GetMovieRecommendationsResponse,
   ListMovieProvidersQueryParams,
@@ -41,6 +43,7 @@ type TmdbProvider = {
 
 type TmdbCreditPerson = {
   id: number;
+  name?: string;
   order?: number;
   job?: string;
 };
@@ -793,6 +796,49 @@ router.get("/movies/recommendations", async (req, res): Promise<void> => {
           totalResults,
         },
       ),
+    );
+  } catch (error) {
+    respondWithError(req, res, error);
+  }
+});
+
+router.get("/movies/credits", async (req, res): Promise<void> => {
+  const parsed = GetMovieCreditsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "Il film richiesto non è valido.",
+      code: "invalid_movie_id",
+    } satisfies MovieErrorResponse);
+    return;
+  }
+
+  try {
+    const credits = await getTmdb<TmdbCredits>(
+      `/movie/${parsed.data.movieId}/credits`,
+      { language: "it-IT" },
+      12 * 60 * 60 * 1000,
+    );
+    const directors = [
+      ...new Set(
+        (credits.crew ?? [])
+          .filter((person) => person.job === "Director")
+          .map((person) => person.name?.trim())
+          .filter((name): name is string => Boolean(name)),
+      ),
+    ].slice(0, 2);
+    const cast = (credits.cast ?? [])
+      .slice()
+      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+      .map((person) => person.name?.trim())
+      .filter((name): name is string => Boolean(name))
+      .slice(0, 5);
+
+    res.json(
+      GetMovieCreditsResponse.parse({
+        movieId: parsed.data.movieId,
+        directors,
+        cast,
+      }),
     );
   } catch (error) {
     respondWithError(req, res, error);
