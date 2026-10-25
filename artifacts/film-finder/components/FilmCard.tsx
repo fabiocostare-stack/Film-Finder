@@ -33,6 +33,13 @@ function yearOf(date: string): string {
   return date?.slice(0, 4) || "Anno non disponibile";
 }
 
+function formatRuntime(runtime: number | null | undefined): string | null {
+  if (!runtime || !Number.isInteger(runtime) || runtime < 1) return null;
+  const hours = Math.floor(runtime / 60);
+  const minutes = runtime % 60;
+  return `${hours} h ${minutes} min`;
+}
+
 export function FilmCard({
   movie,
   credits,
@@ -58,6 +65,7 @@ export function FilmCard({
   const posterUri = movie.posterPath
     ? `https://image.tmdb.org/t/p/w342${movie.posterPath}`
     : null;
+  const runtimeLabel = formatRuntime(credits?.runtime);
 
   return (
     <View
@@ -104,6 +112,7 @@ export function FilmCard({
         <Text style={[styles.meta, { color: colors.mutedForeground }]}>
           {yearOf(movie.releaseDate)}
           {movie.originalLanguage ? ` · ${movie.originalLanguage.toUpperCase()}` : ""}
+          {runtimeLabel ? ` · ${runtimeLabel}` : ""}
         </Text>
         {creditsLoading && !credits ? (
           <View style={styles.creditLoading}>

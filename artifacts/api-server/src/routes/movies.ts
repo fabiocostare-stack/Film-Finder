@@ -55,6 +55,11 @@ type TmdbCredits = {
   crew?: TmdbCreditPerson[];
 };
 
+type TmdbMovieDetails = TmdbMovie & {
+  runtime?: number | null;
+  credits?: TmdbCredits;
+};
+
 type TmdbList<T> = {
   results?: T[];
   page?: number;
@@ -805,11 +810,12 @@ router.get("/movies/recommendations", async (req, res): Promise<void> => {
 });
 
 async function loadMovieCredits(movieId: number) {
-  const credits = await getTmdb<TmdbCredits>(
-    `/movie/${movieId}/credits`,
-    { language: "it-IT" },
+  const details = await getTmdb<TmdbMovieDetails>(
+    `/movie/${movieId}`,
+    { language: "it-IT", append_to_response: "credits" },
     12 * 60 * 60 * 1000,
   );
+  const credits = details.credits ?? {};
   const directors = [
     ...new Set(
       (credits.crew ?? [])
@@ -824,8 +830,14 @@ async function loadMovieCredits(movieId: number) {
     .map((person) => person.name?.trim())
     .filter((name): name is string => Boolean(name))
     .slice(0, 5);
+  const runtime =
+    typeof details.runtime === "number" &&
+    Number.isInteger(details.runtime) &&
+    details.runtime > 0
+      ? details.runtime
+      : null;
 
-  return GetMovieCreditsResponse.parse({ movieId, directors, cast });
+  return GetMovieCreditsResponse.parse({ movieId, directors, cast, runtime });
 }
 
 router.get("/movies/credits/batch", async (req, res): Promise<void> => {

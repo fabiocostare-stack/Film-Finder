@@ -172,7 +172,8 @@ export const GetMovieCreditsQueryParams = zod.object({
 export const GetMovieCreditsResponse = zod.object({
   "movieId": zod.number().int(),
   "directors": zod.array(zod.string()),
-  "cast": zod.array(zod.string())
+  "cast": zod.array(zod.string()),
+  "runtime": zod.number().int().nullable()
 })
 
 
@@ -191,7 +192,8 @@ export const GetMovieCreditsBatchResponse = zod.object({
   "results": zod.array(zod.object({
   "movieId": zod.number().int(),
   "directors": zod.array(zod.string()),
-  "cast": zod.array(zod.string())
+  "cast": zod.array(zod.string()),
+  "runtime": zod.number().int().nullable()
 }))
 })
 

@@ -56,6 +56,8 @@ export interface MovieCreditsResponse {
   movieId: number;
   directors: string[];
   cast: string[];
+  /** @nullable */
+  runtime: number | null;
 }
 
 export interface MovieCreditsBatchResponse {

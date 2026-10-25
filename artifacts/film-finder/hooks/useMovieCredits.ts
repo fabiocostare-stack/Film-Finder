@@ -28,14 +28,16 @@ export function useMovieCredits(movieIds: readonly number[]) {
   }, [movieIdsKey]);
 
   const queries = useQueries({
-    queries: batches.map((ids) =>
-      ({
-        ...getGetMovieCreditsBatchQueryOptions({ movieIds: ids.join(",") }),
+    queries: batches.map((ids) => {
+      const params = { movieIds: ids.join(",") };
+      return {
+        ...getGetMovieCreditsBatchQueryOptions(params),
+        queryKey: ["movie-credits-with-runtime-v1", params.movieIds],
         staleTime: CREDIT_STALE_TIME,
         refetchOnWindowFocus: false,
         retry: false,
-      }),
-    ),
+      };
+    }),
   });
 
   const creditsByMovieId = useMemo(() => {
