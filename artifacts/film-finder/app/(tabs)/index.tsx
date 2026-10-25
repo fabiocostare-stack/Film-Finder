@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -7,6 +7,8 @@ import {
   StyleSheet,
   Text,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from "react-native";
 import { useGetMovieRecommendations } from "@workspace/api-client-react";
 import type {
@@ -24,6 +26,16 @@ import {
 } from "@/components/CatalogNotice";
 import { useColors } from "@/hooks/useColors";
 import { usePreferences } from "@/context/PreferencesContext";
+
+const MAX_VISIBLE_MOVIES = 30;
+let nextFeedSessionId = 0;
+
+type RecommendationProfile = {
+  providerIds: string;
+  seedMovieIds: string;
+  genreIds: string;
+  taste: string;
+};
 
 function getPreferredGenres(movies: Movie[]): number[] {
   const weights = new Map<number, number>();
@@ -53,18 +65,56 @@ export default function HomeScreen() {
     clearRecommendationHistory,
   } = usePreferences();
   const [page, setPage] = useState<number>(1);
+  const [feedGeneration, setFeedGeneration] = useState<number>(0);
+  const [feedSessionId] = useState<number>(() => ++nextFeedSessionId);
+  const [feedProfile, setFeedProfile] =
+    useState<RecommendationProfile | null>(null);
+  const [feedMovies, setFeedMovies] = useState<Movie[]>([]);
+  const [totalPages, setTotalPages] = useState<number>(0);
+  const feedMoviesRef = useRef<Movie[]>([]);
+  const appendedPageRef = useRef<number>(0);
+  const requestedPageRef = useRef<number | null>(null);
+  const previousPreferenceKeyRef = useRef<string | null>(null);
   const hasSelectedProviders = preferences.selectedProviders.length > 0;
   const preferredGenres = useMemo(
     () => getPreferredGenres(preferences.watchedMovies),
     [preferences.watchedMovies],
   );
-  const seedMovieIds = useMemo(
-    () =>
-      preferences.watchedMovies
+  const currentProfile = useMemo<RecommendationProfile>(
+    () => ({
+      providerIds: preferences.selectedProviders
+        .map((provider) => provider.id)
+        .join(","),
+      seedMovieIds: preferences.watchedMovies
         .slice(0, 4)
         .map((movie) => movie.id)
         .join(","),
-    [preferences.watchedMovies],
+      genreIds: preferredGenres.join(","),
+      taste: preferences.taste.trim(),
+    }),
+    [
+      preferredGenres,
+      preferences.selectedProviders,
+      preferences.taste,
+      preferences.watchedMovies,
+    ],
+  );
+  const currentProfileRef = useRef<RecommendationProfile>(currentProfile);
+  currentProfileRef.current = currentProfile;
+  const preferenceKey = useMemo(
+    () =>
+      JSON.stringify([
+        preferences.selectedProviders
+          .map((provider) => provider.id)
+          .sort((a, b) => a - b),
+        preferences.taste.trim(),
+        preferences.historyRevision,
+      ]),
+    [
+      preferences.historyRevision,
+      preferences.selectedProviders,
+      preferences.taste,
+    ],
   );
 
   const excludedIds = useMemo(
@@ -82,52 +132,55 @@ export default function HomeScreen() {
       preferences.shownMovieIds,
     ],
   );
+  const startNewFeed = useCallback(() => {
+    feedMoviesRef.current = [];
+    setFeedMovies([]);
+    setTotalPages(0);
+    setPage(1);
+    appendedPageRef.current = 0;
+    requestedPageRef.current = null;
+    setFeedProfile(currentProfileRef.current);
+    setFeedGeneration((current) => current + 1);
+  }, []);
+
+  useEffect(() => {
+    if (!isReady) return;
+    if (previousPreferenceKeyRef.current === null) {
+      previousPreferenceKeyRef.current = preferenceKey;
+      setFeedProfile(currentProfileRef.current);
+      return;
+    }
+    if (previousPreferenceKeyRef.current !== preferenceKey) {
+      previousPreferenceKeyRef.current = preferenceKey;
+      startNewFeed();
+    }
+  }, [isReady, preferenceKey, startNewFeed]);
+
   const queryParams = useMemo<GetMovieRecommendationsParams>(
     () => ({
       region: "IT",
       page,
-      providerIds: preferences.selectedProviders
-        .map((provider) => provider.id)
-        .join(","),
-      seedMovieIds: seedMovieIds || undefined,
-      genreIds: preferredGenres.join(",") || undefined,
+      providerIds: feedProfile?.providerIds ?? "",
+      seedMovieIds: feedProfile?.seedMovieIds || undefined,
+      genreIds: feedProfile?.genreIds || undefined,
       excludeIds: excludedIds || undefined,
-      taste: preferences.taste.trim() || undefined,
+      taste: feedProfile?.taste || undefined,
     }),
-    [
-      excludedIds,
-      page,
-      preferredGenres,
-      seedMovieIds,
-      preferences.watchedMovies,
-      preferences.selectedProviders,
-      preferences.taste,
-    ],
-  );
-  const recommendationKey = useMemo(
-    () => [
-      "movie-recommendations",
-      page,
-      preferences.selectedProviders.map((provider) => provider.id).join(","),
-      preferences.watchedMovies.map((movie) => movie.id).join(","),
-      preferences.taste,
-      preferences.historyRevision,
-    ],
-    [
-      page,
-      preferences.watchedMovies,
-      preferences.selectedProviders,
-      preferences.taste,
-      preferences.historyRevision,
-    ],
+    [excludedIds, feedProfile, page],
   );
   const recommendations = useGetMovieRecommendations(queryParams, {
     query: {
       enabled:
         isReady &&
         preferences.platformSetupComplete &&
-        hasSelectedProviders,
-      queryKey: recommendationKey,
+        hasSelectedProviders &&
+        feedProfile !== null,
+      queryKey: [
+        "movie-recommendations",
+        feedSessionId,
+        feedGeneration,
+        page,
+      ],
       staleTime: Infinity,
       refetchOnWindowFocus: false,
       retry: false,
@@ -135,16 +188,79 @@ export default function HomeScreen() {
   });
 
   useEffect(() => {
-    const ids = recommendations.data?.results.map((movie) => movie.id) ?? [];
-    if (ids.length > 0) markShown(ids);
-  }, [markShown, recommendations.data?.results]);
+    const response = recommendations.data;
+    if (
+      !response ||
+      response.page !== page ||
+      appendedPageRef.current === page
+    ) {
+      return;
+    }
 
-  const movieCount = recommendations.data?.results.length ?? 0;
+    appendedPageRef.current = page;
+    requestedPageRef.current = null;
+    setTotalPages(response.totalPages);
+
+    const existingIds = new Set(feedMoviesRef.current.map((movie) => movie.id));
+    const additions = response.results
+      .filter((movie) => !existingIds.has(movie.id))
+      .slice(0, Math.max(0, MAX_VISIBLE_MOVIES - feedMoviesRef.current.length));
+    if (additions.length === 0) return;
+
+    const nextMovies = [...feedMoviesRef.current, ...additions];
+    feedMoviesRef.current = nextMovies;
+    setFeedMovies(nextMovies);
+    markShown(additions.map((movie) => movie.id));
+  }, [markShown, page, recommendations.data]);
+
+  useEffect(() => {
+    if (recommendations.isError) requestedPageRef.current = null;
+  }, [recommendations.isError]);
+
+  const requestNextPage = useCallback(() => {
+    if (
+      !feedProfile ||
+      !hasSelectedProviders ||
+      recommendations.isFetching ||
+      recommendations.isError ||
+      requestedPageRef.current !== null ||
+      feedMoviesRef.current.length >= MAX_VISIBLE_MOVIES ||
+      page >= totalPages
+    ) {
+      return;
+    }
+
+    const nextPage = Math.min(page + 1, 500);
+    if (nextPage === page) return;
+    requestedPageRef.current = nextPage;
+    setPage(nextPage);
+  }, [
+    feedProfile,
+    hasSelectedProviders,
+    page,
+    recommendations.isError,
+    recommendations.isFetching,
+    totalPages,
+  ]);
+
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+      if (
+        contentOffset.y + layoutMeasurement.height >=
+        contentSize.height - 320
+      ) {
+        requestNextPage();
+      }
+    },
+    [requestNextPage],
+  );
+
+  const movieCount = feedMovies.length;
   const paddingTop = Platform.OS === "web" ? 67 : insets.top + 10;
-  const resetRecommendations = () => {
+  const resetRecommendations = useCallback(() => {
     clearRecommendationHistory();
-    setPage(1);
-  };
+  }, [clearRecommendationHistory]);
 
   return (
     <ScrollView
@@ -157,6 +273,8 @@ export default function HomeScreen() {
         },
       ]}
       showsVerticalScrollIndicator={false}
+      onScroll={handleScroll}
+      scrollEventThrottle={16}
     >
       <View style={styles.topline}>
         <View>
@@ -203,27 +321,24 @@ export default function HomeScreen() {
             Scelti per te
           </Text>
           <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
-            Solo sui tuoi servizi · per affinità e voto
+            {movieCount}/{MAX_VISIBLE_MOVIES} film · solo sui tuoi servizi
           </Text>
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Mostra nuovi consigli"
+          accessibilityLabel="Ricarica tutti i consigli"
           testID="refresh-recommendations"
           disabled={!hasSelectedProviders || recommendations.isFetching}
-          onPress={() => {
-            if (movieCount > 0) {
-              markShown(recommendations.data?.results.map((movie) => movie.id) ?? []);
-            }
-            if (page >= 500) {
-              resetRecommendations();
-            } else {
-              setPage((current) => Math.min(current + 1, 500));
-            }
-          }}
+          onPress={startNewFeed}
           style={({ pressed }) => [
             styles.iconButton,
-            { borderColor: colors.border, opacity: pressed ? 0.65 : 1 },
+            {
+              borderColor: colors.border,
+              opacity:
+                pressed || !hasSelectedProviders || recommendations.isFetching
+                  ? 0.65
+                  : 1,
+            },
           ]}
         >
           {recommendations.isFetching ? (
@@ -234,7 +349,10 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      {!isReady || (hasSelectedProviders && recommendations.isLoading) ? (
+      {!isReady ||
+      (hasSelectedProviders &&
+        feedMovies.length === 0 &&
+        (feedProfile === null || recommendations.isLoading)) ? (
         <View style={[styles.loadingPanel, { borderColor: colors.border }]}>
           <ActivityIndicator color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>
@@ -265,7 +383,7 @@ export default function HomeScreen() {
             </Text>
           </Pressable>
         </View>
-      ) : recommendations.isError ? (
+      ) : recommendations.isError && movieCount === 0 ? (
         <CatalogNotice
           title="Catalogo non disponibile"
           message={getCatalogErrorMessage(
@@ -285,14 +403,22 @@ export default function HomeScreen() {
           </Text>
           <Pressable
             accessibilityRole="button"
-            onPress={() => setPage((current) => (current >= 500 ? 1 : current + 1))}
+            testID="load-more-recommendations-empty"
+            disabled={page >= totalPages || recommendations.isFetching}
+            onPress={requestNextPage}
             style={({ pressed }) => [
               styles.secondaryButton,
-              { borderColor: colors.border, opacity: pressed ? 0.75 : 1 },
+              {
+                borderColor: colors.border,
+                opacity:
+                  pressed || page >= totalPages || recommendations.isFetching
+                    ? 0.5
+                    : 1,
+              },
             ]}
           >
             <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>
-              Prova un altro gruppo
+              Cerca altri film
             </Text>
           </Pressable>
           <Pressable
@@ -307,7 +433,7 @@ export default function HomeScreen() {
         </View>
       ) : (
         <View style={styles.movieList}>
-          {recommendations.data?.results.map((movie) => (
+          {feedMovies.map((movie) => (
             <FilmCard
               key={movie.id}
               movie={movie}
@@ -317,10 +443,74 @@ export default function HomeScreen() {
               onToggleSave={toggleSavedMovie}
               onDismiss={(movie) => {
                 dismissMovie(movie);
-                setPage((current) => (current >= 500 ? 1 : current + 1));
+                const nextMovies = feedMoviesRef.current.filter(
+                  (item) => item.id !== movie.id,
+                );
+                feedMoviesRef.current = nextMovies;
+                setFeedMovies(nextMovies);
               }}
             />
           ))}
+          {recommendations.isError ? (
+            <CatalogNotice
+              title="Altri film non disponibili"
+              message={getCatalogErrorMessage(
+                recommendations.error,
+                "Non è stato possibile caricare altri consigli. Riprova.",
+              )}
+              onRetry={() => void recommendations.refetch()}
+            />
+          ) : recommendations.isFetching ? (
+            <View style={[styles.loadingPanel, { borderColor: colors.border }]}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>
+                Aggiungiamo altri film…
+              </Text>
+            </View>
+          ) : movieCount >= MAX_VISIBLE_MOVIES ? (
+            <View style={[styles.emptyPanel, { borderColor: colors.border }]}>
+              <Feather name="check-circle" size={22} color={colors.primary} />
+              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+                Hai raggiunto i 30 film
+              </Text>
+              <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
+                Ricarica per iniziare una nuova lista di consigli.
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                testID="reload-recommendations-at-limit"
+                onPress={startNewFeed}
+                style={({ pressed }) => [
+                  styles.secondaryButton,
+                  { borderColor: colors.border, opacity: pressed ? 0.75 : 1 },
+                ]}
+              >
+                <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>
+                  Ricarica tutti i consigli
+                </Text>
+              </Pressable>
+            </View>
+          ) : page < totalPages ? (
+            <Pressable
+              accessibilityRole="button"
+              testID="load-more-recommendations"
+              onPress={requestNextPage}
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                styles.loadMoreButton,
+                { borderColor: colors.border, opacity: pressed ? 0.75 : 1 },
+              ]}
+            >
+              <Feather name="chevrons-down" size={16} color={colors.primary} />
+              <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>
+                Carica altri film
+              </Text>
+            </Pressable>
+          ) : (
+            <Text style={[styles.feedEndText, { color: colors.mutedForeground }]}>
+              Hai raggiunto la fine dei risultati disponibili.
+            </Text>
+          )}
         </View>
       )}
 
@@ -403,6 +593,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   movieList: { gap: 14 },
+  loadMoreButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  feedEndText: {
+    paddingVertical: 12,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+  },
   loadingPanel: {
     minHeight: 120,
     borderRadius: 20,
