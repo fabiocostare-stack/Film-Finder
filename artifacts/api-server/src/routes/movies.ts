@@ -39,6 +39,17 @@ type TmdbProvider = {
   display_priority?: number;
 };
 
+type TmdbCreditPerson = {
+  id: number;
+  order?: number;
+  job?: string;
+};
+
+type TmdbCredits = {
+  cast?: TmdbCreditPerson[];
+  crew?: TmdbCreditPerson[];
+};
+
 type TmdbList<T> = {
   results?: T[];
   page?: number;
@@ -136,6 +147,17 @@ type SimilarMovie = {
   rankScore: number;
 };
 
+type WatchedPeople = {
+  actorIds: number[];
+  directorIds: number[];
+};
+
+type PersonDiscoverCandidate = {
+  movie: TmdbMovie;
+  matchedActors: boolean;
+  matchedDirectors: boolean;
+};
+
 async function getSimilarMovies(
   seedMovieIds: number[],
   page: number,
@@ -174,6 +196,147 @@ async function getSimilarMovies(
       (b.movie.vote_average ?? 0) - (a.movie.vote_average ?? 0) ||
       (b.movie.vote_count ?? 0) - (a.movie.vote_count ?? 0),
   );
+}
+
+async function getWatchedPeople(seedMovieIds: number[]): Promise<WatchedPeople> {
+  const actorWeights = new Map<number, number>();
+  const directorWeights = new Map<number, number>();
+  const responses = await Promise.allSettled(
+    seedMovieIds.slice(0, 4).map((movieId) =>
+      getTmdb<TmdbCredits>(
+        `/movie/${movieId}/credits`,
+        { language: "it-IT" },
+        12 * 60 * 60 * 1000,
+      ),
+    ),
+  );
+
+  responses.forEach((response, seedIndex) => {
+    if (response.status !== "fulfilled") return;
+    const recencyWeight = 1 / (1 + seedIndex * 0.35);
+    const credits = response.value;
+
+    (credits.cast ?? []).slice(0, 8).forEach((person, rank) => {
+      const castOrder = person.order ?? rank;
+      const weight = recencyWeight / (1 + castOrder * 0.12);
+      actorWeights.set(person.id, (actorWeights.get(person.id) ?? 0) + weight);
+    });
+
+    (credits.crew ?? [])
+      .filter((person) => person.job === "Director")
+      .slice(0, 2)
+      .forEach((person, rank) => {
+        const weight = recencyWeight * (1.5 / (1 + rank * 0.2));
+        directorWeights.set(
+          person.id,
+          (directorWeights.get(person.id) ?? 0) + weight,
+        );
+      });
+  });
+
+  const topPeople = (weights: Map<number, number>, limit: number) =>
+    [...weights.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+      .slice(0, limit)
+      .map(([personId]) => personId);
+
+  return {
+    actorIds: topPeople(actorWeights, 5),
+    directorIds: topPeople(directorWeights, 3),
+  };
+}
+
+async function getPersonDiscoverAtQuality(
+  people: WatchedPeople,
+  params: Record<string, string | number>,
+  page: number,
+  minRating: number,
+  minVoteCount: number,
+): Promise<PersonDiscoverCandidate[]> {
+  const requestFor = (
+    ids: number[],
+    filter: "with_cast" | "with_crew",
+  ): Promise<TmdbList<TmdbMovie>> =>
+    ids.length === 0
+      ? Promise.resolve({ results: [] })
+      : getTmdb<TmdbList<TmdbMovie>>(
+          "/discover/movie",
+          {
+            ...params,
+            [filter]: ids.join("|"),
+            "vote_average.gte": minRating,
+            "vote_count.gte": minVoteCount,
+            page,
+          },
+          3 * 60 * 1000,
+        );
+
+  const [castResults, crewResults] = await Promise.all([
+    requestFor(people.actorIds, "with_cast"),
+    requestFor(people.directorIds, "with_crew"),
+  ]);
+  const candidates = new Map<number, PersonDiscoverCandidate>();
+
+  for (const movie of castResults.results ?? []) {
+    candidates.set(movie.id, {
+      movie,
+      matchedActors: true,
+      matchedDirectors: false,
+    });
+  }
+  for (const movie of crewResults.results ?? []) {
+    const candidate = candidates.get(movie.id);
+    if (candidate) {
+      candidate.matchedDirectors = true;
+    } else {
+      candidates.set(movie.id, {
+        movie,
+        matchedActors: false,
+        matchedDirectors: true,
+      });
+    }
+  }
+
+  return [...candidates.values()];
+}
+
+async function getPersonDiscoverCandidates(
+  people: WatchedPeople,
+  params: Record<string, string | number>,
+  page: number,
+): Promise<PersonDiscoverCandidate[]> {
+  if (people.actorIds.length === 0 && people.directorIds.length === 0) {
+    return [];
+  }
+
+  const preferred = await getPersonDiscoverAtQuality(
+    people,
+    params,
+    page,
+    7,
+    100,
+  );
+  if (preferred.length >= 20) return preferred;
+
+  const relaxed = await getPersonDiscoverAtQuality(
+    people,
+    params,
+    page,
+    6.5,
+    50,
+  );
+  const candidates = new Map<number, PersonDiscoverCandidate>();
+  for (const candidate of [...preferred, ...relaxed]) {
+    const existing = candidates.get(candidate.movie.id);
+    if (existing) {
+      existing.matchedActors ||= candidate.matchedActors;
+      existing.matchedDirectors ||= candidate.matchedDirectors;
+    } else {
+      candidates.set(candidate.movie.id, candidate);
+    }
+  }
+
+  return [...candidates.values()];
 }
 
 async function getAvailableSimilarMovies(
@@ -439,18 +602,21 @@ router.get("/movies/recommendations", async (req, res): Promise<void> => {
     return;
   }
 
-  const params: Record<string, string | number> = {
+  const providerParams: Record<string, string | number> = {
     language: "it-IT",
     region,
     include_adult: "false",
     sort_by: "vote_average.desc",
-      "vote_average.gte": 7,
+    with_watch_providers: providers.join("|"),
+    with_watch_monetization_types: "flatrate|free|ads",
+    watch_region: region,
+  };
+  const params: Record<string, string | number> = {
+    ...providerParams,
+    "vote_average.gte": 7,
     "vote_count.gte": 100,
   };
   if (genres.length > 0) params.with_genres = genres.join("|");
-  params.with_watch_providers = providers.join("|");
-  params.with_watch_monetization_types = "flatrate|free|ads";
-  params.watch_region = region;
 
   try {
     const discoveryPagePromise = getTmdb<TmdbList<TmdbMovie>>(
@@ -459,21 +625,26 @@ router.get("/movies/recommendations", async (req, res): Promise<void> => {
       3 * 60 * 1000,
     );
     const similarMoviesPromise = getSimilarMovies(seedMovieIds, pageNumber);
-    const [discoveryPage, similarMovies] = await Promise.all([
+    const watchedPeoplePromise = getWatchedPeople(seedMovieIds);
+    const [discoveryPage, similarMovies, watchedPeople] = await Promise.all([
       discoveryPagePromise,
       similarMoviesPromise,
+      watchedPeoplePromise,
     ]);
     const checkedSimilarIds = new Set<number>();
-    const relatedMovies = await getAvailableSimilarMovies(
-      similarMovies,
-      region,
-      providers,
-      excludeIds,
-      7,
-      100,
-      32,
-      checkedSimilarIds,
-    );
+    const [relatedMovies, personCandidates] = await Promise.all([
+      getAvailableSimilarMovies(
+        similarMovies,
+        region,
+        providers,
+        excludeIds,
+        7,
+        100,
+        32,
+        checkedSimilarIds,
+      ),
+      getPersonDiscoverCandidates(watchedPeople, providerParams, pageNumber),
+    ]);
     const relaxedRelatedMovies =
       relatedMovies.length < 20
         ? await getAvailableSimilarMovies(
@@ -487,25 +658,63 @@ router.get("/movies/recommendations", async (req, res): Promise<void> => {
             checkedSimilarIds,
           )
         : [];
-    const movieResults: Array<{
+    type ScoredMovie = {
       movie: Movie;
       matchedSeeds: number;
       rankScore: number;
+      matchedActors: boolean;
+      matchedDirectors: boolean;
       voteCount: number;
-    }> = [];
-    const resultIds = new Set<number>();
+    };
+    const movieResults = new Map<number, ScoredMovie>();
     let totalPages = discoveryPage.total_pages ?? 0;
     let totalResults = discoveryPage.total_results ?? 0;
     const excluded = new Set(excludeIds);
 
+    const addMovie = (
+      movie: TmdbMovie,
+      signals: {
+        matchedSeeds?: number;
+        rankScore?: number;
+        matchedActors?: boolean;
+        matchedDirectors?: boolean;
+      } = {},
+    ) => {
+      if (excluded.has(movie.id)) return;
+      const current = movieResults.get(movie.id);
+      if (current) {
+        current.matchedSeeds = Math.max(
+          current.matchedSeeds,
+          signals.matchedSeeds ?? 0,
+        );
+        current.rankScore = Math.max(
+          current.rankScore,
+          signals.rankScore ?? 0,
+        );
+        current.matchedActors ||= signals.matchedActors ?? false;
+        current.matchedDirectors ||= signals.matchedDirectors ?? false;
+        return;
+      }
+      movieResults.set(movie.id, {
+        movie: mapMovie(movie),
+        matchedSeeds: signals.matchedSeeds ?? 0,
+        rankScore: signals.rankScore ?? 0,
+        matchedActors: signals.matchedActors ?? false,
+        matchedDirectors: signals.matchedDirectors ?? false,
+        voteCount: movie.vote_count ?? 0,
+      });
+    };
+
     for (const candidate of [...relatedMovies, ...relaxedRelatedMovies]) {
-      if (resultIds.has(candidate.movie.id)) continue;
-      resultIds.add(candidate.movie.id);
-      movieResults.push({
-        movie: mapMovie(candidate.movie),
+      addMovie(candidate.movie, {
         matchedSeeds: candidate.matchedSeeds,
         rankScore: candidate.rankScore,
-        voteCount: candidate.movie.vote_count ?? 0,
+      });
+    }
+    for (const candidate of personCandidates) {
+      addMovie(candidate.movie, {
+        matchedActors: candidate.matchedActors,
+        matchedDirectors: candidate.matchedDirectors,
       });
     }
 
@@ -514,13 +723,13 @@ router.get("/movies/recommendations", async (req, res): Promise<void> => {
       { "vote_average.gte": 6.5, "vote_count.gte": 50 },
     ];
     for (const [qualityIndex, quality] of qualityLevels.entries()) {
-      if (movieResults.length >= 20) break;
+      if (movieResults.size >= 20) break;
       const qualityParams = { ...params, ...quality };
       const lastPageToScan = Math.min(500, pageNumber + 2);
 
       for (
         let scanPage = pageNumber;
-        scanPage <= lastPageToScan && movieResults.length < 20;
+        scanPage <= lastPageToScan && movieResults.size < 20;
         scanPage += 1
       ) {
         const payload =
@@ -535,37 +744,40 @@ router.get("/movies/recommendations", async (req, res): Promise<void> => {
         totalResults = payload.total_results ?? 0;
 
         for (const movie of payload.results ?? []) {
-          if (excluded.has(movie.id) || resultIds.has(movie.id)) continue;
-          resultIds.add(movie.id);
-          movieResults.push({
-            movie: mapMovie(movie),
-            matchedSeeds: 0,
-            rankScore: 0,
-            voteCount: movie.vote_count ?? 0,
-          });
+          addMovie(movie);
         }
 
         if (scanPage >= totalPages) break;
       }
 
       if (
-        movieResults.length >= 20 ||
+        movieResults.size >= 20 ||
         (totalResults === 0 && qualityIndex === 1)
       ) {
         break;
       }
     }
 
-    const combinedScore = (item: (typeof movieResults)[number]) => {
-      const affinity = Math.min(
+    const rankedMovies = [...movieResults.values()];
+    const combinedScore = (item: ScoredMovie) => {
+      const seedAffinity = Math.min(
         1,
         (item.matchedSeeds / 4) * 0.65 + (item.rankScore / 4) * 0.35,
       );
-      return (item.movie.voteAverage / 10) * 0.5 + affinity * 0.5;
+      const artistAffinity =
+        (item.matchedActors ? 0.5 : 0) +
+        (item.matchedDirectors ? 0.5 : 0);
+      return (
+        (item.movie.voteAverage / 10) * 0.5 +
+        seedAffinity * 0.25 +
+        artistAffinity * 0.25
+      );
     };
-    movieResults.sort(
+    rankedMovies.sort(
       (a, b) =>
         combinedScore(b) - combinedScore(a) ||
+        Number(b.matchedDirectors) - Number(a.matchedDirectors) ||
+        Number(b.matchedActors) - Number(a.matchedActors) ||
         b.matchedSeeds - a.matchedSeeds ||
         b.rankScore - a.rankScore ||
         b.movie.voteAverage - a.movie.voteAverage ||
@@ -575,7 +787,7 @@ router.get("/movies/recommendations", async (req, res): Promise<void> => {
     res.json(
       GetMovieRecommendationsResponse.parse(
         {
-          results: movieResults.slice(0, 20).map((item) => item.movie),
+          results: rankedMovies.slice(0, 20).map((item) => item.movie),
           page: pageNumber,
           totalPages,
           totalResults,
