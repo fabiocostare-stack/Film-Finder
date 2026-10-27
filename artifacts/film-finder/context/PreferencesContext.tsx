@@ -1,5 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { Movie, MovieProvider } from "@workspace/api-client-react";
+import type {
+  DirectorProfile,
+  Movie,
+  MovieProvider,
+} from "@workspace/api-client-react";
 import {
   createContext,
   useCallback,
@@ -18,6 +22,7 @@ export type MoviePreferences = {
   shownMovieIds: number[];
   dismissedMovieIds: number[];
   selectedProviders: MovieProvider[];
+  followedDirectors: DirectorProfile[];
   platformSetupComplete: boolean;
   taste: string;
   historyRevision: number;
@@ -29,6 +34,7 @@ type PreferencesContextValue = {
   storageError: boolean;
   toggleWatchedMovie: (movie: Movie) => void;
   toggleSavedMovie: (movie: Movie) => void;
+  toggleFollowedDirector: (director: DirectorProfile) => void;
   toggleProvider: (provider: MovieProvider) => void;
   completePlatformSetup: () => void;
   saveTaste: (taste: string) => void;
@@ -43,6 +49,7 @@ const emptyPreferences: MoviePreferences = {
   shownMovieIds: [],
   dismissedMovieIds: [],
   selectedProviders: [],
+  followedDirectors: [],
   platformSetupComplete: false,
   taste: "",
   historyRevision: 0,
@@ -61,6 +68,9 @@ function restorePreferences(value: unknown): MoviePreferences | null {
   const selectedProviders = Array.isArray(candidate.selectedProviders)
     ? (candidate.selectedProviders as MovieProvider[])
     : [];
+  const followedDirectors = Array.isArray(candidate.followedDirectors)
+    ? candidate.followedDirectors.filter(isDirectorProfile)
+    : [];
 
   return {
     watchedMovies: Array.isArray(candidate.watchedMovies)
@@ -73,11 +83,12 @@ function restorePreferences(value: unknown): MoviePreferences | null {
       ? (candidate.shownMovieIds as number[])
       : Array.isArray(candidate.seenMovieIds)
         ? (candidate.seenMovieIds as number[])
-      : [],
+        : [],
     dismissedMovieIds: Array.isArray(candidate.dismissedMovieIds)
       ? (candidate.dismissedMovieIds as number[])
       : [],
     selectedProviders,
+    followedDirectors,
     platformSetupComplete:
       typeof candidate.platformSetupComplete === "boolean"
         ? candidate.platformSetupComplete
@@ -88,6 +99,19 @@ function restorePreferences(value: unknown): MoviePreferences | null {
         ? candidate.historyRevision
         : 0,
   };
+}
+
+function isDirectorProfile(value: unknown): value is DirectorProfile {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.id === "number" &&
+    Number.isInteger(candidate.id) &&
+    candidate.id > 0 &&
+    typeof candidate.name === "string" &&
+    (typeof candidate.profilePath === "string" ||
+      candidate.profilePath === null)
+  );
 }
 
 function toggleMovie(movies: Movie[], movie: Movie): Movie[] {
@@ -151,6 +175,20 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const toggleFollowedDirector = useCallback((director: DirectorProfile) => {
+    setPreferences((current) => {
+      const alreadyFollowing = current.followedDirectors.some(
+        (item) => item.id === director.id,
+      );
+      return {
+        ...current,
+        followedDirectors: alreadyFollowing
+          ? current.followedDirectors.filter((item) => item.id !== director.id)
+          : [director, ...current.followedDirectors].slice(0, 40),
+      };
+    });
+  }, []);
+
   const toggleProvider = useCallback((provider: MovieProvider) => {
     setPreferences((current) => ({
       ...current,
@@ -192,10 +230,12 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   const dismissMovie = useCallback((movie: Movie) => {
     setPreferences((current) => ({
       ...current,
-      dismissedMovieIds: [...new Set([...current.dismissedMovieIds, movie.id])].slice(
+      dismissedMovieIds: [
+        ...new Set([...current.dismissedMovieIds, movie.id]),
+      ].slice(-1000),
+      shownMovieIds: [...new Set([...current.shownMovieIds, movie.id])].slice(
         -1000,
       ),
-      shownMovieIds: [...new Set([...current.shownMovieIds, movie.id])].slice(-1000),
     }));
   }, []);
 
@@ -215,6 +255,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       storageError,
       toggleWatchedMovie,
       toggleSavedMovie,
+      toggleFollowedDirector,
       toggleProvider,
       completePlatformSetup,
       saveTaste,
@@ -228,6 +269,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       storageError,
       toggleWatchedMovie,
       toggleSavedMovie,
+      toggleFollowedDirector,
       toggleProvider,
       completePlatformSetup,
       saveTaste,

@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -6,17 +6,17 @@ import {
   Text,
   useColorScheme,
   View,
-} from 'react-native';
-import { useColors } from '@/hooks/useColors';
-import { Feather } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import { isLiquidGlassAvailable } from 'expo-glass-effect';
-import { Tabs } from 'expo-router';
-import { NativeTabs } from 'expo-router/unstable-native-tabs';
-import { SymbolView } from 'expo-symbols';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { usePreferences } from '@/context/PreferencesContext';
-import PlatformOnboarding from '@/components/PlatformOnboarding';
+} from "react-native";
+import { useColors } from "@/hooks/useColors";
+import { Feather } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
+import { isLiquidGlassAvailable } from "expo-glass-effect";
+import { Tabs } from "expo-router";
+import { NativeTabs } from "expo-router/unstable-native-tabs";
+import { SymbolView } from "expo-symbols";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePreferences } from "@/context/PreferencesContext";
+import PlatformOnboarding from "@/components/PlatformOnboarding";
 
 // IMPORTANT: iOS 26 uses NativeTabs for native tabs with liquid glass support.
 // NativeTabs intentionally does NOT use custom design tokens — liquid glass
@@ -27,9 +27,9 @@ function NativeTabLayout() {
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Icon
-          sf={{ default: 'sparkles', selected: 'sparkles' }}
+          sf={{ default: "sparkles", selected: "sparkles" }}
         />
-        <NativeTabs.Trigger.Label>Per te</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Registi</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="search" role="search">
         <NativeTabs.Trigger.Icon sf="magnifyingglass" />
@@ -37,13 +37,16 @@ function NativeTabLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="library">
         <NativeTabs.Trigger.Icon
-          sf={{ default: 'bookmark', selected: 'bookmark.fill' }}
+          sf={{ default: "bookmark", selected: "bookmark.fill" }}
         />
         <NativeTabs.Trigger.Label>Lista</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <NativeTabs.Trigger.Icon
-          sf={{ default: 'slider.horizontal.3', selected: 'slider.horizontal.3' }}
+          sf={{
+            default: "slider.horizontal.3",
+            selected: "slider.horizontal.3",
+          }}
         />
         <NativeTabs.Trigger.Label>Profilo</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
@@ -55,9 +58,9 @@ function ClassicTabLayout() {
   const colors = useColors();
   const colorScheme = useColorScheme();
   const safeAreaInsets = useSafeAreaInsets();
-  const isDark = colorScheme === 'dark';
-  const isIOS = Platform.OS === 'ios';
-  const isWeb = Platform.OS === 'web';
+  const isDark = colorScheme === "dark";
+  const isIOS = Platform.OS === "ios";
+  const isWeb = Platform.OS === "web";
 
   return (
     <Tabs
@@ -66,20 +69,23 @@ function ClassicTabLayout() {
         tabBarInactiveTintColor: colors.mutedForeground,
         headerShown: false,
         tabBarStyle: {
-          position: 'absolute',
-          backgroundColor: isIOS ? 'transparent' : colors.background,
+          position: "absolute",
+          backgroundColor: isIOS ? "transparent" : colors.background,
           borderTopWidth: isWeb ? 1 : 0,
           borderTopColor: colors.border,
           elevation: 0,
           ...(isWeb
             ? { height: 84 }
-            : { paddingBottom: safeAreaInsets.bottom, height: 58 + safeAreaInsets.bottom }),
+            : {
+                paddingBottom: safeAreaInsets.bottom,
+                height: 58 + safeAreaInsets.bottom,
+              }),
         },
         tabBarBackground: () =>
           isIOS ? (
             <BlurView
               intensity={100}
-              tint={isDark ? 'dark' : 'light'}
+              tint={isDark ? "dark" : "light"}
               style={StyleSheet.absoluteFill}
             />
           ) : isWeb ? (
@@ -95,7 +101,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Per te',
+          title: "Registi",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="sparkles" tintColor={color} size={22} />
@@ -107,7 +113,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="search"
         options={{
-          title: 'Cerca',
+          title: "Cerca",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="magnifyingglass" tintColor={color} size={22} />
@@ -119,7 +125,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="library"
         options={{
-          title: 'Lista',
+          title: "Lista",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="bookmark" tintColor={color} size={22} />
@@ -131,10 +137,14 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profilo',
+          title: "Profilo",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="slider.horizontal.3" tintColor={color} size={22} />
+              <SymbolView
+                name="slider.horizontal.3"
+                tintColor={color}
+                size={22}
+              />
             ) : (
               <Feather name="sliders" size={21} color={color} />
             ),
@@ -150,12 +160,7 @@ export default function TabLayout() {
 
   if (!isReady) {
     return (
-      <View
-        style={[
-          styles.startup,
-          { backgroundColor: colors.background },
-        ]}
-      >
+      <View style={[styles.startup, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={colors.primary} />
         <Text style={[styles.startupText, { color: colors.mutedForeground }]}>
           Carico le tue preferenze…
@@ -175,6 +180,6 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  startup: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  startup: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   startupText: { fontSize: 12 },
 });

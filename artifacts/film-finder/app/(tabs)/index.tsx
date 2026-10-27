@@ -20,6 +20,7 @@ import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FilmCard } from "@/components/FilmCard";
+import { DirectorDiscovery } from "@/components/DirectorDiscovery";
 import {
   CatalogNotice,
   getCatalogErrorMessage,
@@ -65,11 +66,13 @@ export default function HomeScreen() {
     dismissMovie,
     clearRecommendationHistory,
   } = usePreferences();
+  const [homeView, setHomeView] = useState<"directors" | "movies">("directors");
   const [page, setPage] = useState<number>(1);
   const [feedGeneration, setFeedGeneration] = useState<number>(0);
   const [feedSessionId] = useState<number>(() => ++nextFeedSessionId);
-  const [feedProfile, setFeedProfile] =
-    useState<RecommendationProfile | null>(null);
+  const [feedProfile, setFeedProfile] = useState<RecommendationProfile | null>(
+    null,
+  );
   const [feedMovies, setFeedMovies] = useState<Movie[]>([]);
   const [totalPages, setTotalPages] = useState<number>(0);
   const feedMoviesRef = useRef<Movie[]>([]);
@@ -173,15 +176,11 @@ export default function HomeScreen() {
     query: {
       enabled:
         isReady &&
+        homeView === "movies" &&
         preferences.platformSetupComplete &&
         hasSelectedProviders &&
         feedProfile !== null,
-      queryKey: [
-        "movie-recommendations",
-        feedSessionId,
-        feedGeneration,
-        page,
-      ],
+      queryKey: ["movie-recommendations", feedSessionId, feedGeneration, page],
       staleTime: Infinity,
       refetchOnWindowFocus: false,
       retry: false,
@@ -192,6 +191,7 @@ export default function HomeScreen() {
   useEffect(() => {
     const response = recommendations.data;
     if (
+      homeView !== "movies" ||
       !response ||
       response.page !== page ||
       appendedPageRef.current === page
@@ -213,7 +213,7 @@ export default function HomeScreen() {
     feedMoviesRef.current = nextMovies;
     setFeedMovies(nextMovies);
     markShown(additions.map((movie) => movie.id));
-  }, [markShown, page, recommendations.data]);
+  }, [homeView, markShown, page, recommendations.data]);
 
   useEffect(() => {
     if (recommendations.isError) requestedPageRef.current = null;
@@ -221,6 +221,7 @@ export default function HomeScreen() {
 
   const requestNextPage = useCallback(() => {
     if (
+      homeView !== "movies" ||
       !feedProfile ||
       !hasSelectedProviders ||
       recommendations.isFetching ||
@@ -239,6 +240,7 @@ export default function HomeScreen() {
   }, [
     feedProfile,
     hasSelectedProviders,
+    homeView,
     page,
     recommendations.isError,
     recommendations.isFetching,
@@ -248,7 +250,8 @@ export default function HomeScreen() {
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (feedMoviesRef.current.length === 0) return;
-      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+      const { contentOffset, contentSize, layoutMeasurement } =
+        event.nativeEvent;
       if (
         contentOffset.y + layoutMeasurement.height >=
         contentSize.height - 320
@@ -276,7 +279,7 @@ export default function HomeScreen() {
         },
       ]}
       showsVerticalScrollIndicator={false}
-      onScroll={handleScroll}
+      onScroll={homeView === "movies" ? handleScroll : undefined}
       scrollEventThrottle={16}
     >
       <View style={styles.topline}>
@@ -285,7 +288,11 @@ export default function HomeScreen() {
             FILM FINDER
           </Text>
           <Text style={[styles.pageTitle, { color: colors.foreground }]}>
-            Stasera,{"\n"}qualcosa di nuovo.
+            {homeView === "directors" ? (
+              <>Il cinema,{"\n"}dai registi.</>
+            ) : (
+              <>Stasera,{"\n"}qualcosa di nuovo.</>
+            )}
           </Text>
         </View>
         <View style={[styles.regionBadge, { borderColor: colors.border }]}>
@@ -304,13 +311,21 @@ export default function HomeScreen() {
       >
         <View style={styles.featureCopy}>
           <Text style={[styles.featureLabel, { color: colors.primary }]}>
-            IL TUO PROSSIMO FILM
+            {homeView === "directors"
+              ? "SCOPRI I MAESTRI"
+              : "IL TUO PROSSIMO FILM"}
           </Text>
           <Text style={[styles.featureTitle, { color: colors.foreground }]}>
-            Meno scroll.{"\n"}Più cinema.
+            {homeView === "directors" ? (
+              <>Grandi film.{"\n"}Grandi registi.</>
+            ) : (
+              <>Meno scroll.{"\n"}Più cinema.</>
+            )}
           </Text>
           <Text style={[styles.featureBody, { color: colors.mutedForeground }]}>
-            Solo sui servizi che hai. Prima i film più apprezzati e vicini a ciò che hai visto.
+            {homeView === "directors"
+              ? "Segui chi ti piace e trova i suoi film sui servizi che hai."
+              : "Solo sui servizi che hai. Prima i film più apprezzati e vicini a ciò che hai visto."}
           </Text>
         </View>
         <View style={[styles.reelMark, { backgroundColor: colors.primary }]}>
@@ -318,212 +333,346 @@ export default function HomeScreen() {
         </View>
       </LinearGradient>
 
-      <View style={styles.sectionHeading}>
-        <View>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-            Scelti per te
-          </Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}>
-            {movieCount}/{MAX_VISIBLE_MOVIES} film · solo sui tuoi servizi
-          </Text>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Ricarica tutti i consigli"
-          testID="refresh-recommendations"
-          disabled={!hasSelectedProviders || recommendations.isFetching}
-          onPress={startNewFeed}
-          style={({ pressed }) => [
-            styles.iconButton,
-            {
-              borderColor: colors.border,
-              opacity:
-                pressed || !hasSelectedProviders || recommendations.isFetching
-                  ? 0.65
-                  : 1,
-            },
-          ]}
-        >
-          {recommendations.isFetching ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <Feather name="shuffle" size={17} color={colors.primary} />
-          )}
-        </Pressable>
+      <View
+        style={[
+          styles.homeSegment,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
+        {(
+          [
+            ["directors", "Registi", "user"],
+            ["movies", "Film per te", "star"],
+          ] as const
+        ).map(([view, label, icon]) => {
+          const selected = homeView === view;
+          return (
+            <Pressable
+              key={view}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              onPress={() => setHomeView(view)}
+              style={({ pressed }) => [
+                styles.homeSegmentButton,
+                selected ? { backgroundColor: colors.primary } : null,
+                { opacity: pressed ? 0.75 : 1 },
+              ]}
+            >
+              <Feather
+                name={icon}
+                size={15}
+                color={
+                  selected ? colors.primaryForeground : colors.mutedForeground
+                }
+              />
+              <Text
+                style={[
+                  styles.homeSegmentText,
+                  {
+                    color: selected
+                      ? colors.primaryForeground
+                      : colors.mutedForeground,
+                  },
+                ]}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
-      {!isReady ||
-      (hasSelectedProviders &&
-        feedMovies.length === 0 &&
-        (feedProfile === null || recommendations.isLoading)) ? (
-        <View style={[styles.loadingPanel, { borderColor: colors.border }]}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>
-            Prepariamo i tuoi consigli…
-          </Text>
-        </View>
-      ) : !hasSelectedProviders ? (
-        <View style={[styles.emptyPanel, { borderColor: colors.border }]}>
-          <Feather name="tv" size={24} color={colors.primary} />
-          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-            Scegli dove guardare
-          </Text>
-          <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
-            Per mostrarti solo film disponibili per te, seleziona almeno una
-            piattaforma nel profilo.
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            testID="choose-streaming-platforms"
-            onPress={() => router.push("/(tabs)/profile")}
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              { borderColor: colors.border, opacity: pressed ? 0.75 : 1 },
-            ]}
-          >
-            <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>
-              Scegli piattaforme
-            </Text>
-          </Pressable>
-        </View>
-      ) : recommendations.isError && movieCount === 0 ? (
-        <CatalogNotice
-          title="Catalogo non disponibile"
-          message={getCatalogErrorMessage(
-            recommendations.error,
-            "Non è stato possibile caricare i consigli. Verifica la connessione e riprova.",
-          )}
-          onRetry={() => void recommendations.refetch()}
-        />
-      ) : movieCount === 0 ? (
-        <View style={[styles.emptyPanel, { borderColor: colors.border }]}>
-          <Feather name="film" size={24} color={colors.primary} />
-          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-            Nessun titolo nuovo in questo gruppo
-          </Text>
-          <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
-            I film già mostrati o segnati come visti sono esclusi. Prova un altro gruppo o azzera la cronologia dei consigli.
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            testID="load-more-recommendations-empty"
-            disabled={page >= totalPages || recommendations.isFetching}
-            onPress={requestNextPage}
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              {
-                borderColor: colors.border,
-                opacity:
-                  pressed || page >= totalPages || recommendations.isFetching
-                    ? 0.5
-                    : 1,
-              },
-            ]}
-          >
-            <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>
-              Cerca altri film
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={resetRecommendations}
-            style={({ pressed }) => [styles.textButton, { opacity: pressed ? 0.65 : 1 }]}
-          >
-            <Text style={[styles.textButtonText, { color: colors.primary }]}>
-              Azzera la cronologia
-            </Text>
-          </Pressable>
-        </View>
+      {homeView === "directors" ? (
+        <DirectorDiscovery />
       ) : (
-        <View style={styles.movieList}>
-          {feedMovies.map((movie) => (
-            <FilmCard
-              key={movie.id}
-              movie={movie}
-              credits={movieCredits.creditsByMovieId.get(movie.id)}
-              creditsLoading={
-                movieCredits.isFetching &&
-                !movieCredits.creditsByMovieId.has(movie.id)
-              }
-              isWatched={preferences.watchedMovies.some((item) => item.id === movie.id)}
-              isSaved={preferences.savedMovies.some((item) => item.id === movie.id)}
-              onToggleWatched={toggleWatchedMovie}
-              onToggleSave={toggleSavedMovie}
-              onDismiss={(movie) => {
-                dismissMovie(movie);
-                const nextMovies = feedMoviesRef.current.filter(
-                  (item) => item.id !== movie.id,
-                );
-                feedMoviesRef.current = nextMovies;
-                setFeedMovies(nextMovies);
-              }}
-            />
-          ))}
-          {recommendations.isError ? (
-            <CatalogNotice
-              title="Altri film non disponibili"
-              message={getCatalogErrorMessage(
-                recommendations.error,
-                "Non è stato possibile caricare altri consigli. Riprova.",
-              )}
-              onRetry={() => void recommendations.refetch()}
-            />
-          ) : recommendations.isFetching ? (
-            <View style={[styles.loadingPanel, { borderColor: colors.border }]}>
-              <ActivityIndicator color={colors.primary} />
-              <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>
-                Aggiungiamo altri film…
+        <>
+          <View style={styles.sectionHeading}>
+            <View>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+                Scelti per te
+              </Text>
+              <Text
+                style={[
+                  styles.sectionSubtitle,
+                  { color: colors.mutedForeground },
+                ]}
+              >
+                {movieCount}/{MAX_VISIBLE_MOVIES} film · solo sui tuoi servizi
               </Text>
             </View>
-          ) : movieCount >= MAX_VISIBLE_MOVIES ? (
-            <View style={[styles.emptyPanel, { borderColor: colors.border }]}>
-              <Feather name="check-circle" size={22} color={colors.primary} />
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                Hai raggiunto i 30 film
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Ricarica tutti i consigli"
+              testID="refresh-recommendations"
+              disabled={!hasSelectedProviders || recommendations.isFetching}
+              onPress={startNewFeed}
+              style={({ pressed }) => [
+                styles.iconButton,
+                {
+                  borderColor: colors.border,
+                  opacity:
+                    pressed ||
+                    !hasSelectedProviders ||
+                    recommendations.isFetching
+                      ? 0.65
+                      : 1,
+                },
+              ]}
+            >
+              {recommendations.isFetching ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Feather name="shuffle" size={17} color={colors.primary} />
+              )}
+            </Pressable>
+          </View>
+
+          {!isReady ||
+          (hasSelectedProviders &&
+            feedMovies.length === 0 &&
+            (feedProfile === null || recommendations.isLoading)) ? (
+            <View style={[styles.loadingPanel, { borderColor: colors.border }]}>
+              <ActivityIndicator color={colors.primary} />
+              <Text
+                style={[styles.loadingText, { color: colors.mutedForeground }]}
+              >
+                Prepariamo i tuoi consigli…
               </Text>
-              <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
-                Ricarica per iniziare una nuova lista di consigli.
+            </View>
+          ) : !hasSelectedProviders ? (
+            <View style={[styles.emptyPanel, { borderColor: colors.border }]}>
+              <Feather name="tv" size={24} color={colors.primary} />
+              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+                Scegli dove guardare
+              </Text>
+              <Text
+                style={[styles.emptyBody, { color: colors.mutedForeground }]}
+              >
+                Per mostrarti solo film disponibili per te, seleziona almeno una
+                piattaforma nel profilo.
               </Text>
               <Pressable
                 accessibilityRole="button"
-                testID="reload-recommendations-at-limit"
-                onPress={startNewFeed}
+                testID="choose-streaming-platforms"
+                onPress={() => router.push("/(tabs)/profile")}
                 style={({ pressed }) => [
                   styles.secondaryButton,
                   { borderColor: colors.border, opacity: pressed ? 0.75 : 1 },
                 ]}
               >
-                <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>
-                  Ricarica tutti i consigli
+                <Text
+                  style={[
+                    styles.secondaryButtonText,
+                    { color: colors.foreground },
+                  ]}
+                >
+                  Scegli piattaforme
                 </Text>
               </Pressable>
             </View>
-          ) : page < totalPages ? (
-            <Pressable
-              accessibilityRole="button"
-              testID="load-more-recommendations"
-              onPress={requestNextPage}
-              style={({ pressed }) => [
-                styles.secondaryButton,
-                styles.loadMoreButton,
-                { borderColor: colors.border, opacity: pressed ? 0.75 : 1 },
-              ]}
-            >
-              <Feather name="chevrons-down" size={16} color={colors.primary} />
-              <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>
-                Carica altri film
+          ) : recommendations.isError && movieCount === 0 ? (
+            <CatalogNotice
+              title="Catalogo non disponibile"
+              message={getCatalogErrorMessage(
+                recommendations.error,
+                "Non è stato possibile caricare i consigli. Verifica la connessione e riprova.",
+              )}
+              onRetry={() => void recommendations.refetch()}
+            />
+          ) : movieCount === 0 ? (
+            <View style={[styles.emptyPanel, { borderColor: colors.border }]}>
+              <Feather name="film" size={24} color={colors.primary} />
+              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+                Nessun titolo nuovo in questo gruppo
               </Text>
-            </Pressable>
+              <Text
+                style={[styles.emptyBody, { color: colors.mutedForeground }]}
+              >
+                I film già mostrati o segnati come visti sono esclusi. Prova un
+                altro gruppo o azzera la cronologia dei consigli.
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                testID="load-more-recommendations-empty"
+                disabled={page >= totalPages || recommendations.isFetching}
+                onPress={requestNextPage}
+                style={({ pressed }) => [
+                  styles.secondaryButton,
+                  {
+                    borderColor: colors.border,
+                    opacity:
+                      pressed ||
+                      page >= totalPages ||
+                      recommendations.isFetching
+                        ? 0.5
+                        : 1,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.secondaryButtonText,
+                    { color: colors.foreground },
+                  ]}
+                >
+                  Cerca altri film
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={resetRecommendations}
+                style={({ pressed }) => [
+                  styles.textButton,
+                  { opacity: pressed ? 0.65 : 1 },
+                ]}
+              >
+                <Text
+                  style={[styles.textButtonText, { color: colors.primary }]}
+                >
+                  Azzera la cronologia
+                </Text>
+              </Pressable>
+            </View>
           ) : (
-            <Text style={[styles.feedEndText, { color: colors.mutedForeground }]}>
-              Hai raggiunto la fine dei risultati disponibili.
-            </Text>
+            <View style={styles.movieList}>
+              {feedMovies.map((movie) => (
+                <FilmCard
+                  key={movie.id}
+                  movie={movie}
+                  credits={movieCredits.creditsByMovieId.get(movie.id)}
+                  creditsLoading={
+                    movieCredits.isFetching &&
+                    !movieCredits.creditsByMovieId.has(movie.id)
+                  }
+                  isWatched={preferences.watchedMovies.some(
+                    (item) => item.id === movie.id,
+                  )}
+                  isSaved={preferences.savedMovies.some(
+                    (item) => item.id === movie.id,
+                  )}
+                  onToggleWatched={toggleWatchedMovie}
+                  onToggleSave={toggleSavedMovie}
+                  onDismiss={(movie) => {
+                    dismissMovie(movie);
+                    const nextMovies = feedMoviesRef.current.filter(
+                      (item) => item.id !== movie.id,
+                    );
+                    feedMoviesRef.current = nextMovies;
+                    setFeedMovies(nextMovies);
+                  }}
+                />
+              ))}
+              {recommendations.isError ? (
+                <CatalogNotice
+                  title="Altri film non disponibili"
+                  message={getCatalogErrorMessage(
+                    recommendations.error,
+                    "Non è stato possibile caricare altri consigli. Riprova.",
+                  )}
+                  onRetry={() => void recommendations.refetch()}
+                />
+              ) : recommendations.isFetching ? (
+                <View
+                  style={[styles.loadingPanel, { borderColor: colors.border }]}
+                >
+                  <ActivityIndicator color={colors.primary} />
+                  <Text
+                    style={[
+                      styles.loadingText,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    Aggiungiamo altri film…
+                  </Text>
+                </View>
+              ) : movieCount >= MAX_VISIBLE_MOVIES ? (
+                <View
+                  style={[styles.emptyPanel, { borderColor: colors.border }]}
+                >
+                  <Feather
+                    name="check-circle"
+                    size={22}
+                    color={colors.primary}
+                  />
+                  <Text
+                    style={[styles.emptyTitle, { color: colors.foreground }]}
+                  >
+                    Hai raggiunto i 30 film
+                  </Text>
+                  <Text
+                    style={[
+                      styles.emptyBody,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    Ricarica per iniziare una nuova lista di consigli.
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    testID="reload-recommendations-at-limit"
+                    onPress={startNewFeed}
+                    style={({ pressed }) => [
+                      styles.secondaryButton,
+                      {
+                        borderColor: colors.border,
+                        opacity: pressed ? 0.75 : 1,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.secondaryButtonText,
+                        { color: colors.foreground },
+                      ]}
+                    >
+                      Ricarica tutti i consigli
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : page < totalPages ? (
+                <Pressable
+                  accessibilityRole="button"
+                  testID="load-more-recommendations"
+                  onPress={requestNextPage}
+                  style={({ pressed }) => [
+                    styles.secondaryButton,
+                    styles.loadMoreButton,
+                    { borderColor: colors.border, opacity: pressed ? 0.75 : 1 },
+                  ]}
+                >
+                  <Feather
+                    name="chevrons-down"
+                    size={16}
+                    color={colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.secondaryButtonText,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    Carica altri film
+                  </Text>
+                </Pressable>
+              ) : (
+                <Text
+                  style={[
+                    styles.feedEndText,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  Hai raggiunto la fine dei risultati disponibili.
+                </Text>
+              )}
+            </View>
           )}
-        </View>
+        </>
       )}
 
       <Text style={[styles.footer, { color: colors.mutedForeground }]}>
-        I consigli si adattano ai film che hai già visto e alle piattaforme che selezioni.
+        {homeView === "directors"
+          ? "I film proposti sono inediti e disponibili sulle piattaforme che hai selezionato."
+          : "I consigli si adattano ai film che hai già visto e alle piattaforme che selezioni."}
       </Text>
     </ScrollView>
   );
@@ -567,7 +716,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   featureCopy: { flex: 1, paddingRight: 6 },
-  featureLabel: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 1.5 },
+  featureLabel: {
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 1.5,
+  },
   featureTitle: {
     marginTop: 9,
     fontSize: 24,
@@ -584,13 +737,34 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     transform: [{ rotate: "-8deg" }],
   },
+  homeSegment: {
+    flexDirection: "row",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 4,
+    gap: 4,
+  },
+  homeSegmentButton: {
+    flex: 1,
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    borderRadius: 12,
+  },
+  homeSegmentText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   sectionHeading: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
   },
-  sectionTitle: { fontSize: 21, fontFamily: "Inter_700Bold", letterSpacing: -0.4 },
+  sectionTitle: {
+    fontSize: 21,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: -0.4,
+  },
   sectionSubtitle: { marginTop: 4, fontSize: 12 },
   iconButton: {
     width: 42,
@@ -629,7 +803,11 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 12,
   },
-  emptyTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  emptyTitle: {
+    fontSize: 17,
+    fontFamily: "Inter_600SemiBold",
+    textAlign: "center",
+  },
   emptyBody: { fontSize: 13, lineHeight: 20, textAlign: "center" },
   secondaryButton: {
     marginTop: 4,
@@ -641,5 +819,10 @@ const styles = StyleSheet.create({
   secondaryButtonText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   textButton: { padding: 8 },
   textButtonText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  footer: { fontSize: 11, lineHeight: 17, textAlign: "center", paddingHorizontal: 18 },
+  footer: {
+    fontSize: 11,
+    lineHeight: 17,
+    textAlign: "center",
+    paddingHorizontal: 18,
+  },
 });
