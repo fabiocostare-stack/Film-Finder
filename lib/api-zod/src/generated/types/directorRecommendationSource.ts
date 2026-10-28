@@ -12,5 +12,6 @@ export type DirectorRecommendationSource = typeof DirectorRecommendationSource[k
 export const DirectorRecommendationSource = {
   followed: 'followed',
   watched: 'watched',
+  similar: 'similar',
   popular: 'popular',
 } as const;

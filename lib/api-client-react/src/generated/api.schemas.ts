@@ -77,6 +77,7 @@ export type DirectorRecommendationSource = typeof DirectorRecommendationSource[k
 export const DirectorRecommendationSource = {
   followed: 'followed',
   watched: 'watched',
+  similar: 'similar',
   popular: 'popular',
 } as const;
 
@@ -216,5 +217,11 @@ followedDirectorIds?: string;
  * @maxLength 4000
  */
 excludeMovieIds?: string;
+/**
+ * Rotates director and film selections when the user refreshes the list.
+ * @minimum 0
+ * @maximum 1000000
+ */
+rotation?: number;
 };
 

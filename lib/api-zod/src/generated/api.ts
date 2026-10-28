@@ -213,6 +213,10 @@ export const getDirectorDiscoveriesQueryFollowedDirectorIdsMax = 500;
 
 export const getDirectorDiscoveriesQueryExcludeMovieIdsMax = 4000;
 
+export const getDirectorDiscoveriesQueryRotationDefault = 0;
+export const getDirectorDiscoveriesQueryRotationMin = 0;
+export const getDirectorDiscoveriesQueryRotationMax = 1000000;
+
 
 
 export const GetDirectorDiscoveriesQueryParams = zod.object({
@@ -220,7 +224,8 @@ export const GetDirectorDiscoveriesQueryParams = zod.object({
   "providerIds": zod.coerce.string().min(1).max(getDirectorDiscoveriesQueryProviderIdsMax).describe('Comma-separated streaming provider IDs selected by the user.'),
   "watchedMovieIds": zod.coerce.string().max(getDirectorDiscoveriesQueryWatchedMovieIdsMax).optional().describe('Comma-separated watched movie IDs used to discover directors and exclude watched films.'),
   "followedDirectorIds": zod.coerce.string().max(getDirectorDiscoveriesQueryFollowedDirectorIdsMax).optional().describe('Comma-separated director IDs explicitly followed by the user.'),
-  "excludeMovieIds": zod.coerce.string().max(getDirectorDiscoveriesQueryExcludeMovieIdsMax).optional().describe('Comma-separated movie IDs dismissed from the recommendation feed.')
+  "excludeMovieIds": zod.coerce.string().max(getDirectorDiscoveriesQueryExcludeMovieIdsMax).optional().describe('Comma-separated movie IDs dismissed from the recommendation feed.'),
+  "rotation": zod.coerce.number().int().min(getDirectorDiscoveriesQueryRotationMin).max(getDirectorDiscoveriesQueryRotationMax).default(getDirectorDiscoveriesQueryRotationDefault).describe('Rotates director and film selections when the user refreshes the list.')
 })
 
 export const GetDirectorDiscoveriesResponse = zod.object({
@@ -230,7 +235,7 @@ export const GetDirectorDiscoveriesResponse = zod.object({
   "name": zod.string(),
   "profilePath": zod.string().nullable()
 }),
-  "source": zod.enum(['followed', 'watched', 'popular']),
+  "source": zod.enum(['followed', 'watched', 'similar', 'popular']),
   "movies": zod.array(zod.object({
   "id": zod.number().int(),
   "title": zod.string(),
@@ -250,7 +255,7 @@ export const GetDirectorDiscoveriesResponse = zod.object({
   "name": zod.string(),
   "profilePath": zod.string().nullable()
 }),
-  "source": zod.enum(['followed', 'watched', 'popular']),
+  "source": zod.enum(['followed', 'watched', 'similar', 'popular']),
   "movies": zod.array(zod.object({
   "id": zod.number().int(),
   "title": zod.string(),

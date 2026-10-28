@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -27,6 +27,7 @@ const DIRECTOR_STALE_TIME = 30 * 60 * 1000;
 
 export function DirectorDiscovery() {
   const colors = useColors();
+  const [rotation, setRotation] = useState(0);
   const {
     preferences,
     isReady,
@@ -37,6 +38,7 @@ export function DirectorDiscovery() {
   const params = useMemo<GetDirectorDiscoveriesParams>(
     () => ({
       region: "IT",
+      rotation,
       providerIds: preferences.selectedProviders
         .map((provider) => provider.id)
         .join(","),
@@ -53,6 +55,7 @@ export function DirectorDiscovery() {
         preferences.dismissedMovieIds.slice(-200).join(",") || undefined,
     }),
     [
+      rotation,
       preferences.dismissedMovieIds,
       preferences.followedDirectors,
       preferences.selectedProviders,
@@ -67,6 +70,7 @@ export function DirectorDiscovery() {
         preferences.selectedProviders.length > 0,
       queryKey: getGetDirectorDiscoveriesQueryKey(params),
       staleTime: DIRECTOR_STALE_TIME,
+      placeholderData: (previousData) => previousData,
       refetchOnWindowFocus: false,
       retry: false,
     },
@@ -105,7 +109,9 @@ export function DirectorDiscovery() {
         ? "Lo segui"
         : item.source === "watched"
           ? "Dai film che hai già visto"
-          : "Da un film molto apprezzato";
+          : item.source === "similar"
+            ? "Affini ai film che hai visto"
+            : "Da un film molto apprezzato";
 
     return (
       <View
@@ -254,13 +260,13 @@ export function DirectorDiscovery() {
           <Text
             style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}
           >
-            Dai film visti, da quelli che segui e dai tuoi servizi
+            Dai film visti, dai registi seguiti e da quelli affini
           </Text>
         </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Aggiorna i registi"
-          onPress={() => void discoveries.refetch()}
+          onPress={() => setRotation((current) => (current + 1) % 1_000_000)}
           disabled={discoveries.isFetching}
           style={({ pressed }) => [
             styles.refreshButton,

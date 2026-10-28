@@ -310,6 +310,14 @@ paths:
           schema:
             type: string
             maxLength: 4000
+        - name: rotation
+          in: query
+          description: Rotates director and film selections when the user refreshes the list.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 1000000
+            default: 0
       responses:
         "200":
           description: Personalized and popular directors with available film picks
@@ -491,7 +499,7 @@ components:
           $ref: "#/components/schemas/DirectorProfile"
         source:
           type: string
-          enum: [followed, watched, popular]
+          enum: [followed, watched, similar, popular]
         movies:
           type: array
           items:

@@ -136,6 +136,12 @@ function parseIds(value?: string): number[] {
   ].filter((id) => Number.isInteger(id) && id > 0);
 }
 
+function rotateItems<T>(items: readonly T[], offset: number): T[] {
+  if (items.length === 0) return [];
+  const start = offset % items.length;
+  return [...items.slice(start), ...items.slice(0, start)];
+}
+
 const genreTerms: Record<number, string[]> = {
   12: ["avventura", "avventuroso", "adventure"],
   14: ["fantasy", "magia", "magico", "fantastico", "fantastici"],
@@ -226,12 +232,18 @@ async function getSimilarMovies(
 
 async function getWatchedPeople(
   seedMovieIds: number[],
+  options: {
+    maxSeedMovies?: number;
+    maxActors?: number;
+    maxDirectors?: number;
+  } = {},
 ): Promise<WatchedPeople> {
+  const { maxSeedMovies = 4, maxActors = 5, maxDirectors = 3 } = options;
   const actorWeights = new Map<number, number>();
   const directorWeights = new Map<number, number>();
   const responses = await Promise.allSettled(
     seedMovieIds
-      .slice(0, 4)
+      .slice(0, maxSeedMovies)
       .map((movieId) =>
         getTmdb<TmdbCredits>(
           `/movie/${movieId}/credits`,
@@ -271,8 +283,8 @@ async function getWatchedPeople(
       .map(([personId]) => personId);
 
   return {
-    actorIds: topPeople(actorWeights, 5),
-    directorIds: topPeople(directorWeights, 3),
+    actorIds: topPeople(actorWeights, maxActors),
+    directorIds: topPeople(directorWeights, maxDirectors),
   };
 }
 
@@ -369,6 +381,93 @@ async function getPersonDiscoverCandidates(
   return [...candidates.values()];
 }
 
+async function getSimilarDirectorCandidates(
+  people: WatchedPeople,
+  params: Record<string, string | number>,
+  page: number,
+  excludedDirectorIds: Set<number>,
+  excludedMovieIds: Set<number>,
+  limit: number,
+): Promise<DirectorCandidate[]> {
+  if (people.actorIds.length === 0 && people.directorIds.length === 0) {
+    return [];
+  }
+
+  const movieCandidates = (
+    await getPersonDiscoverCandidates(people, params, page)
+  )
+    .filter(
+      ({ movie }) =>
+        !excludedMovieIds.has(movie.id) &&
+        (movie.vote_average ?? 0) >= 7 &&
+        (movie.vote_count ?? 0) >= 100,
+    )
+    .sort(
+      (a, b) =>
+        Number(b.matchedDirectors) - Number(a.matchedDirectors) ||
+        Number(b.matchedActors) - Number(a.matchedActors) ||
+        (b.movie.vote_average ?? 0) - (a.movie.vote_average ?? 0) ||
+        (b.movie.vote_count ?? 0) - (a.movie.vote_count ?? 0),
+    )
+    .slice(0, 20);
+  const directorScores = new Map<
+    number,
+    { profile: DirectorProfile; score: number; matches: number }
+  >();
+
+  for (let offset = 0; offset < movieCandidates.length; offset += 4) {
+    const batch = movieCandidates.slice(offset, offset + 4);
+    const responses = await Promise.allSettled(
+      batch.map(({ movie }) =>
+        getTmdb<TmdbCredits>(
+          `/movie/${movie.id}/credits`,
+          { language: "it-IT" },
+          12 * 60 * 60 * 1000,
+        ),
+      ),
+    );
+
+    responses.forEach((response, index) => {
+      if (response.status !== "fulfilled") return;
+      const candidate = batch[index];
+      const positionWeight = 1 / Math.log2(offset + index + 2);
+      const affinityWeight =
+        (candidate.matchedActors ? 1.5 : 1) *
+        (candidate.matchedDirectors ? 1.5 : 1);
+      for (const person of response.value.crew ?? []) {
+        if (
+          person.job !== "Director" ||
+          !person.name?.trim() ||
+          excludedDirectorIds.has(person.id)
+        ) {
+          continue;
+        }
+        const current = directorScores.get(person.id) ?? {
+          profile: {
+            id: person.id,
+            name: person.name.trim(),
+            profilePath: person.profile_path ?? null,
+          },
+          score: 0,
+          matches: 0,
+        };
+        current.score += positionWeight * affinityWeight;
+        current.matches += 1;
+        directorScores.set(person.id, current);
+      }
+    });
+  }
+
+  return [...directorScores.values()]
+    .sort((a, b) => b.score - a.score || b.matches - a.matches)
+    .slice(0, limit)
+    .map(({ profile }) => ({
+      id: profile.id,
+      source: "similar",
+      profile,
+    }));
+}
+
 async function getAvailableSimilarMovies(
   candidates: SimilarMovie[],
   region: string,
@@ -433,63 +532,78 @@ async function loadDirectorPicks(
   region: string,
   providerIds: number[],
   excludeMovieIds: number[],
+  rotation: number,
 ): Promise<DirectorRecommendation[]> {
-  const hydrated = await Promise.all(
-    candidates.map(async (candidate) => {
-      const [personResult, movieCreditsResult] = await Promise.allSettled([
-        candidate.profile
-          ? Promise.resolve(null)
-          : getTmdb<TmdbPersonDetails>(
-              `/person/${candidate.id}`,
-              { language: "it-IT" },
-              12 * 60 * 60 * 1000,
-            ),
-        getTmdb<TmdbPersonMovieCredits>(
-          `/person/${candidate.id}/movie_credits`,
-          { language: "it-IT" },
-          12 * 60 * 60 * 1000,
-        ),
-      ]);
+  type HydratedDirectorPick = {
+    director: DirectorProfile;
+    source: DirectorRecommendation["source"];
+    movies: SimilarMovie[];
+  };
+  const hydrated: Array<HydratedDirectorPick | null> = [];
+  for (let offset = 0; offset < candidates.length; offset += 4) {
+    const batch = await Promise.all(
+      candidates.slice(offset, offset + 4).map(async (candidate) => {
+        const [personResult, movieCreditsResult] = await Promise.allSettled([
+          candidate.profile
+            ? Promise.resolve(null)
+            : getTmdb<TmdbPersonDetails>(
+                `/person/${candidate.id}`,
+                { language: "it-IT" },
+                12 * 60 * 60 * 1000,
+              ),
+          getTmdb<TmdbPersonMovieCredits>(
+            `/person/${candidate.id}/movie_credits`,
+            { language: "it-IT" },
+            12 * 60 * 60 * 1000,
+          ),
+        ]);
 
-      const person =
-        personResult.status === "fulfilled" ? personResult.value : null;
-      const director =
-        candidate.profile ??
-        (person?.name?.trim()
-          ? {
-              id: candidate.id,
-              name: person.name.trim(),
-              profilePath: person.profile_path ?? null,
-            }
-          : null);
-      if (!director || movieCreditsResult.status !== "fulfilled") return null;
+        const person =
+          personResult.status === "fulfilled" ? personResult.value : null;
+        const director =
+          candidate.profile ??
+          (person?.name?.trim()
+            ? {
+                id: candidate.id,
+                name: person.name.trim(),
+                profilePath: person.profile_path ?? null,
+              }
+            : null);
+        if (!director || movieCreditsResult.status !== "fulfilled") return null;
 
-      const uniqueMovies = new Map<number, TmdbMovie>();
-      for (const movie of movieCreditsResult.value.crew ?? []) {
-        if (
-          movie.job === "Director" &&
-          (movie.vote_average ?? 0) >= 7 &&
-          (movie.vote_count ?? 0) >= 100
-        ) {
-          uniqueMovies.set(movie.id, movie);
+        const uniqueMovies = new Map<number, TmdbMovie>();
+        for (const movie of movieCreditsResult.value.crew ?? []) {
+          if (
+            movie.job === "Director" &&
+            (movie.vote_average ?? 0) >= 7 &&
+            (movie.vote_count ?? 0) >= 100
+          ) {
+            uniqueMovies.set(movie.id, movie);
+          }
         }
-      }
 
-      const movies = [...uniqueMovies.values()]
-        .sort(
+        const rankedMovies = [...uniqueMovies.values()].sort(
           (a, b) =>
             (b.vote_average ?? 0) - (a.vote_average ?? 0) ||
             (b.vote_count ?? 0) - (a.vote_count ?? 0),
-        )
-        .map((movie, index) => ({
+        );
+        const startIndex =
+          rankedMovies.length > 0 ? (rotation * 2) % rankedMovies.length : 0;
+        const rotatedMovies = [
+          ...rankedMovies.slice(startIndex),
+          ...rankedMovies.slice(0, startIndex),
+        ];
+        const movies = rotatedMovies.map((movie, index) => ({
           movie,
           matchedSeeds: 0,
           rankScore: 1 / (index + 1),
         }));
 
-      return { director, source: candidate.source, movies };
-    }),
-  );
+        return { director, source: candidate.source, movies };
+      }),
+    );
+    hydrated.push(...batch);
+  }
 
   const selectedMovieIds = new Set(excludeMovieIds);
   const picks: DirectorRecommendation[] = [];
@@ -934,6 +1048,8 @@ router.get("/movies/director-discoveries", async (req, res): Promise<void> => {
 
   const region = (parsed.data.region ?? "IT").toUpperCase();
   const providerIds = parseIds(parsed.data.providerIds);
+  const rotation = parsed.data.rotation ?? 0;
+  const discoveryPage = (rotation % 5) + 1;
   if (providerIds.length === 0) {
     res.status(400).json({
       error: "Seleziona almeno una piattaforma per scoprire i registi.",
@@ -943,10 +1059,7 @@ router.get("/movies/director-discoveries", async (req, res): Promise<void> => {
   }
 
   const watchedMovieIds = parseIds(parsed.data.watchedMovieIds);
-  const followedDirectorIds = parseIds(parsed.data.followedDirectorIds).slice(
-    0,
-    4,
-  );
+  const followedDirectorIds = parseIds(parsed.data.followedDirectorIds);
   const excludedMovieIds = [
     ...new Set([...watchedMovieIds, ...parseIds(parsed.data.excludeMovieIds)]),
   ];
@@ -964,30 +1077,63 @@ router.get("/movies/director-discoveries", async (req, res): Promise<void> => {
 
   try {
     const [watchedPeople, popularMovies] = await Promise.all([
-      getWatchedPeople(watchedMovieIds.slice(0, 4)),
+      getWatchedPeople(watchedMovieIds.slice(0, 16), {
+        maxSeedMovies: 16,
+        maxActors: 8,
+        maxDirectors: 8,
+      }),
       getTmdb<TmdbList<TmdbMovie>>(
         "/discover/movie",
-        { ...discoverParams, page: 1 },
+        { ...discoverParams, page: discoveryPage },
         30 * 60 * 1000,
       ),
     ]);
 
-    const personalizedCandidates: DirectorCandidate[] = [];
     const usedDirectorIds = new Set<number>();
-    for (const id of followedDirectorIds) {
+    const followedCandidates = rotateItems(followedDirectorIds, rotation)
+      .slice(0, 4)
+      .map((id) => ({ id, source: "followed" as const }));
+    for (const candidate of followedCandidates) {
+      const id = candidate.id;
       if (usedDirectorIds.has(id)) continue;
       usedDirectorIds.add(id);
-      personalizedCandidates.push({ id, source: "followed" });
     }
-    for (const id of watchedPeople.directorIds) {
-      if (personalizedCandidates.length >= 4) break;
+
+    const watchedCandidates = rotateItems(
+      watchedPeople.directorIds.filter((id) => !usedDirectorIds.has(id)),
+      rotation,
+    )
+      .slice(0, 5)
+      .map((id) => ({ id, source: "watched" as const }));
+    for (const candidate of watchedCandidates) {
+      const id = candidate.id;
       if (usedDirectorIds.has(id)) continue;
       usedDirectorIds.add(id);
-      personalizedCandidates.push({ id, source: "watched" });
+    }
+    const personalizedCandidates: DirectorCandidate[] = [
+      ...followedCandidates,
+      ...watchedCandidates,
+    ];
+
+    const similarCandidates = await getSimilarDirectorCandidates(
+      watchedPeople,
+      discoverParams,
+      discoveryPage,
+      usedDirectorIds,
+      new Set(excludedMovieIds),
+      6,
+    );
+    for (const candidate of rotateItems(similarCandidates, rotation).slice(
+      0,
+      4,
+    )) {
+      if (usedDirectorIds.has(candidate.id)) continue;
+      usedDirectorIds.add(candidate.id);
+      personalizedCandidates.push(candidate);
     }
 
     const popularDirectorProfiles = new Map<number, DirectorProfile>();
-    const popularMovieCandidates = (popularMovies.results ?? []).slice(0, 12);
+    const popularMovieCandidates = (popularMovies.results ?? []).slice(0, 20);
     for (let offset = 0; offset < popularMovieCandidates.length; offset += 4) {
       const movieBatch = popularMovieCandidates.slice(offset, offset + 4);
       const creditResponses = await Promise.allSettled(
@@ -1017,13 +1163,13 @@ router.get("/movies/director-discoveries", async (req, res): Promise<void> => {
           });
         }
       });
-      if (popularDirectorProfiles.size >= 6) break;
+      if (popularDirectorProfiles.size >= 12) break;
     }
 
     const discoverCandidates: DirectorCandidate[] = [
       ...popularDirectorProfiles.values(),
     ]
-      .slice(0, 4)
+      .slice(0, 8)
       .map((profile) => ({
         id: profile.id,
         source: "popular" as const,
@@ -1035,6 +1181,7 @@ router.get("/movies/director-discoveries", async (req, res): Promise<void> => {
       region,
       providerIds,
       excludedMovieIds,
+      rotation,
     );
     res.json(
       GetDirectorDiscoveriesResponse.parse({
