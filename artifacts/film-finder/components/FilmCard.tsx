@@ -52,7 +52,10 @@ export function FilmCard({
 }: FilmCardProps) {
   const colors = useColors();
   const [showAvailability, setShowAvailability] = useState<boolean>(false);
-  const params: GetMovieAvailabilityParams = { movieId: movie.id, region: "IT" };
+  const params: GetMovieAvailabilityParams = {
+    movieId: movie.id,
+    region: "IT",
+  };
   const availability = useGetMovieAvailability(params, {
     query: {
       enabled: showAvailability,
@@ -111,18 +114,28 @@ export function FilmCard({
         </View>
         <Text style={[styles.meta, { color: colors.mutedForeground }]}>
           {yearOf(movie.releaseDate)}
-          {movie.originalLanguage ? ` · ${movie.originalLanguage.toUpperCase()}` : ""}
+          {movie.originalLanguage
+            ? ` · ${movie.originalLanguage.toUpperCase()}`
+            : ""}
           {runtimeLabel ? ` · ${runtimeLabel}` : ""}
         </Text>
         {creditsLoading && !credits ? (
           <View style={styles.creditLoading}>
             <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={[styles.creditText, { color: colors.mutedForeground }]}>
+            <Text
+              style={[styles.creditText, { color: colors.mutedForeground }]}
+            >
               Caricamento regia e cast…
             </Text>
           </View>
         ) : !credits ? (
-          <Text style={[styles.creditText, styles.credits, { color: colors.mutedForeground }]}>
+          <Text
+            style={[
+              styles.creditText,
+              styles.credits,
+              { color: colors.mutedForeground },
+            ]}
+          >
             Regia e cast non disponibili al momento.
           </Text>
         ) : (
@@ -133,7 +146,9 @@ export function FilmCard({
                 numberOfLines={1}
                 style={[styles.creditText, { color: colors.mutedForeground }]}
               >
-                <Text style={[styles.creditLabel, { color: colors.foreground }]}>
+                <Text
+                  style={[styles.creditLabel, { color: colors.foreground }]}
+                >
                   Regia:{" "}
                 </Text>
                 {credits.directors.length
@@ -147,7 +162,9 @@ export function FilmCard({
                 numberOfLines={2}
                 style={[styles.creditText, { color: colors.mutedForeground }]}
               >
-                <Text style={[styles.creditLabel, { color: colors.foreground }]}>
+                <Text
+                  style={[styles.creditLabel, { color: colors.foreground }]}
+                >
                   Cast:{" "}
                 </Text>
                 {credits.cast.length
@@ -215,17 +232,36 @@ export function FilmCard({
             <Pressable
               testID={`save-${movie.id}`}
               accessibilityRole="button"
+              accessibilityState={{ checked: isSaved }}
+              hitSlop={6}
               accessibilityLabel={
-                isSaved ? `Rimuovi ${movie.title} dalla lista` : `Salva ${movie.title} da guardare`
+                isSaved
+                  ? `Rimuovi ${movie.title} dalla lista`
+                  : `Salva ${movie.title} da guardare`
               }
               onPress={() => onToggleSave(movie)}
-              style={({ pressed }) => [styles.iconAction, { opacity: pressed ? 0.55 : 1 }]}
+              style={({ pressed }) => [
+                styles.saveAction,
+                {
+                  backgroundColor: isSaved ? colors.accent : "transparent",
+                  borderColor: isSaved ? colors.accent : colors.border,
+                  opacity: pressed ? 0.65 : 1,
+                },
+              ]}
             >
               <Feather
-                name={isSaved ? "bookmark" : "bookmark"}
+                name="bookmark"
                 size={17}
                 color={isSaved ? colors.primary : colors.mutedForeground}
               />
+              <Text
+                style={[
+                  styles.actionLabel,
+                  { color: isSaved ? colors.primary : colors.mutedForeground },
+                ]}
+              >
+                {isSaved ? "In lista" : "Da vedere"}
+              </Text>
             </Pressable>
             {onDismiss ? (
               <Pressable
@@ -233,7 +269,10 @@ export function FilmCard({
                 accessibilityRole="button"
                 accessibilityLabel={`Non consigliarmi ${movie.title}`}
                 onPress={() => onDismiss(movie)}
-                style={({ pressed }) => [styles.iconAction, { opacity: pressed ? 0.55 : 1 }]}
+                style={({ pressed }) => [
+                  styles.iconAction,
+                  { opacity: pressed ? 0.55 : 1 },
+                ]}
               >
                 <Feather name="x" size={18} color={colors.mutedForeground} />
               </Pressable>
@@ -244,13 +283,20 @@ export function FilmCard({
 
       {showAvailability ? (
         <View style={[styles.availability, { borderTopColor: colors.border }]}>
-          <Text style={[styles.availabilityTitle, { color: colors.foreground }]}>
+          <Text
+            style={[styles.availabilityTitle, { color: colors.foreground }]}
+          >
             In streaming in Italia
           </Text>
           {availability.isLoading ? (
             <ActivityIndicator size="small" color={colors.primary} />
           ) : availability.isError ? (
-            <Text style={[styles.availabilityText, { color: colors.mutedForeground }]}>
+            <Text
+              style={[
+                styles.availabilityText,
+                { color: colors.mutedForeground },
+              ]}
+            >
               Disponibilità non verificabile al momento.
             </Text>
           ) : availability.data?.providers.length ? (
@@ -269,18 +315,34 @@ export function FilmCard({
               {availability.data.link ? (
                 <Pressable
                   accessibilityRole="link"
-                  onPress={() => void Linking.openURL(availability.data?.link ?? "")}
-                  style={({ pressed }) => [styles.tmdbLink, { opacity: pressed ? 0.65 : 1 }]}
+                  onPress={() =>
+                    void Linking.openURL(availability.data?.link ?? "")
+                  }
+                  style={({ pressed }) => [
+                    styles.tmdbLink,
+                    { opacity: pressed ? 0.65 : 1 },
+                  ]}
                 >
-                  <Text style={[styles.tmdbLinkText, { color: colors.primary }]}>
+                  <Text
+                    style={[styles.tmdbLinkText, { color: colors.primary }]}
+                  >
                     Dettagli
                   </Text>
-                  <Feather name="external-link" size={12} color={colors.primary} />
+                  <Feather
+                    name="external-link"
+                    size={12}
+                    color={colors.primary}
+                  />
                 </Pressable>
               ) : null}
             </View>
           ) : (
-            <Text style={[styles.availabilityText, { color: colors.mutedForeground }]}>
+            <Text
+              style={[
+                styles.availabilityText,
+                { color: colors.mutedForeground },
+              ]}
+            >
               Non risultano piattaforme streaming per questo film in Italia.
             </Text>
           )}
@@ -303,7 +365,12 @@ const styles = StyleSheet.create({
   posterFallback: { alignItems: "center", justifyContent: "center" },
   body: { flex: 1, minWidth: 160, paddingLeft: 12, paddingVertical: 3 },
   titleLine: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
-  title: { flex: 1, fontSize: 14, lineHeight: 18, fontFamily: "Inter_600SemiBold" },
+  title: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: "Inter_600SemiBold",
+  },
   rating: { flexDirection: "row", alignItems: "center", gap: 3, paddingTop: 2 },
   ratingText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
   meta: { marginTop: 5, fontSize: 9, letterSpacing: 0.4 },
@@ -343,9 +410,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
   },
+  saveAction: {
+    minHeight: 44,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
   actionLabel: { fontSize: 9, fontFamily: "Inter_600SemiBold" },
   iconActions: { flexDirection: "row", alignItems: "center", gap: 5 },
-  iconAction: { width: 27, height: 30, alignItems: "center", justifyContent: "center" },
+  iconAction: {
+    width: 27,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   availability: {
     width: "100%",
     marginTop: 10,
@@ -355,7 +437,12 @@ const styles = StyleSheet.create({
   },
   availabilityTitle: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   availabilityText: { fontSize: 10, lineHeight: 15 },
-  providerList: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 },
+  providerList: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
+  },
   providerPill: {
     overflow: "hidden",
     paddingVertical: 5,

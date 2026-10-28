@@ -534,6 +534,7 @@ async function loadDirectorPicks(
   excludeMovieIds: number[],
   rotation: number,
 ): Promise<DirectorRecommendation[]> {
+  const maxMoviesPerDirector = 4;
   type HydratedDirectorPick = {
     director: DirectorProfile;
     source: DirectorRecommendation["source"];
@@ -617,10 +618,10 @@ async function loadDirectorPicks(
       [...selectedMovieIds],
       7,
       100,
-      8,
+      12,
       checkedIds,
     );
-    if (available.length < 2) {
+    if (available.length < maxMoviesPerDirector) {
       const additional = await getAvailableSimilarMovies(
         item.movies,
         region,
@@ -628,13 +629,15 @@ async function loadDirectorPicks(
         [...selectedMovieIds],
         7,
         100,
-        16,
+        12,
         checkedIds,
       );
       available = [...available, ...additional];
     }
 
-    const movies = available.slice(0, 2).map(({ movie }) => mapMovie(movie));
+    const movies = available
+      .slice(0, maxMoviesPerDirector)
+      .map(({ movie }) => mapMovie(movie));
     movies.forEach((movie) => selectedMovieIds.add(movie.id));
     picks.push({ director: item.director, source: item.source, movies });
   }
