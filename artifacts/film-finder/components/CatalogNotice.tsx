@@ -21,10 +21,10 @@ export function getCatalogErrorMessage(
   const apiMessage = typeof data?.error === "string" ? data.error.trim() : "";
 
   if (code === "movie_service_not_configured") {
-    return "Il server che ha risposto non ha ricevuto TMDB_API_KEY. La chiave va configurata nei Secrets del progetto collegato a questo server.";
+    return "Il catalogo film non è ancora configurato. Inserisci la tua chiave API gratuita di TMDB nella scheda Profilo per iniziare.";
   }
   if (code === "movie_service_credentials_invalid") {
-    return "TMDB ha rifiutato la chiave configurata. Verifica che sia una chiave API TMDB attiva, non un token di lettura.";
+    return "TMDB ha rifiutato la chiave inserita. Verifica di aver inserito una chiave API TMDB attiva e corretta nella scheda Profilo.";
   }
   if (code === "movie_catalog_rate_limited") {
     return "TMDB sta limitando temporaneamente le richieste. Attendi qualche secondo e riprova.";

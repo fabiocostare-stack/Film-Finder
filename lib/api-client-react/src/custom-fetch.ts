@@ -8,6 +8,8 @@ export type BodyType<T> = T;
 
 export type AuthTokenGetter = () => Promise<string | null> | string | null;
 
+import { handleClientApiRequest, ClientMovieError } from "./tmdb-service";
+
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
@@ -326,10 +328,39 @@ export async function customFetch<T = unknown>(
   input: RequestInfo | URL,
   options: CustomFetchOptions = {},
 ): Promise<T> {
+  const method = resolveMethod(input, options.method);
+  const rawUrl = resolveUrl(input);
+
+  // If no external backend baseUrl is set and calling /api/, handle client-side via TMDB
+  if (!_baseUrl && rawUrl.startsWith("/api/")) {
+    try {
+      const data = await handleClientApiRequest(rawUrl);
+      return data as T;
+    } catch (err: unknown) {
+      if (err instanceof ClientMovieError) {
+        let mockResponse: Response;
+        try {
+          mockResponse = new Response(JSON.stringify(err.data), {
+            status: err.status,
+            statusText: err.code,
+            headers: { "content-type": "application/json" },
+          });
+        } catch {
+          mockResponse = {
+            status: err.status,
+            statusText: err.code,
+            headers: new Headers({ "content-type": "application/json" }),
+            url: rawUrl,
+          } as unknown as Response;
+        }
+        throw new ApiError(mockResponse, err.data, { method, url: rawUrl });
+      }
+      throw err;
+    }
+  }
+
   input = applyBaseUrl(input);
   const { responseType = "auto", headers: headersInit, ...init } = options;
-
-  const method = resolveMethod(input, init.method);
 
   if (init.body != null && (method === "GET" || method === "HEAD")) {
     throw new TypeError(`customFetch: ${method} requests cannot have a body.`);

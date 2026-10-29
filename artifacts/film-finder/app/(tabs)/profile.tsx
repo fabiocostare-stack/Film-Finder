@@ -14,7 +14,10 @@ import {
   getListMovieProvidersQueryKey,
   useListMovieProviders,
   type MovieProvider,
+  getTmdbApiKey,
+  setTmdbApiKey,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   CatalogNotice,
@@ -36,6 +39,21 @@ export default function ProfileScreen() {
   } = usePreferences();
   const [draftTaste, setDraftTaste] = useState<string>(preferences.taste);
   const [saved, setSaved] = useState<boolean>(true);
+  const queryClient = useQueryClient();
+  const [apiKeyInput, setApiKeyInput] = useState<string>(() => getTmdbApiKey() ?? "");
+  const [apiKeySaved, setApiKeySaved] = useState<boolean>(true);
+
+  const handleApiKeyChange = (val: string) => {
+    setApiKeyInput(val);
+    setApiKeySaved(val.trim() === (getTmdbApiKey() ?? ""));
+  };
+
+  const handleSaveApiKey = () => {
+    setTmdbApiKey(apiKeyInput.trim() || null);
+    setApiKeySaved(true);
+    queryClient.invalidateQueries();
+  };
+
   const providers = useListMovieProviders(
     { region: "IT" },
     {
@@ -216,6 +234,71 @@ export default function ProfileScreen() {
           <Feather name="rotate-ccw" size={15} color={colors.foreground} />
           <Text style={[styles.resetText, { color: colors.foreground }]}>Azzera</Text>
         </Pressable>
+      </View>
+
+      <View style={[styles.panel, { borderColor: colors.border, backgroundColor: colors.card }]}>
+        <View style={styles.panelHeading}>
+          <View style={[styles.iconTile, { backgroundColor: colors.accent }]}>
+            <Feather name="key" size={16} color={colors.primary} />
+          </View>
+          <View style={styles.panelHeadingCopy}>
+            <Text style={[styles.panelTitle, { color: colors.foreground }]}>
+              Chiave API TMDB
+            </Text>
+            <Text style={[styles.panelCaption, { color: colors.mutedForeground }]}>
+              Inserisci la tua chiave gratuita di themoviedb.org
+            </Text>
+          </View>
+        </View>
+        <TextInput
+          value={apiKeyInput}
+          onChangeText={handleApiKeyChange}
+          placeholder="Incolla qui la chiave API TMDB..."
+          placeholderTextColor={colors.mutedForeground}
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={[
+            styles.tasteInput,
+            {
+              color: colors.foreground,
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+              minHeight: 44,
+            },
+          ]}
+        />
+        <View style={styles.saveRow}>
+          <Text style={[styles.charCount, { color: colors.mutedForeground }]}>
+            {apiKeySaved
+              ? apiKeyInput
+                ? "Chiave attiva e salvata"
+                : "Nessuna chiave configurata"
+              : "Modifiche non salvate"}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            disabled={apiKeySaved}
+            onPress={handleSaveApiKey}
+            style={({ pressed }) => [
+              styles.saveButton,
+              {
+                backgroundColor: colors.primary,
+                opacity: pressed ? 0.75 : apiKeySaved ? 0.55 : 1,
+              },
+            ]}
+          >
+            <Feather
+              name={apiKeySaved ? "check" : "save"}
+              size={15}
+              color={colors.primaryForeground}
+            />
+            <Text
+              style={[styles.saveButtonText, { color: colors.primaryForeground }]}
+            >
+              {apiKeySaved ? "Salvata" : "Salva chiave"}
+            </Text>
+          </Pressable>
+        </View>
       </View>
 
       {storageError ? (
