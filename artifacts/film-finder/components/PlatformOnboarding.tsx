@@ -1,4 +1,10 @@
-import { useListMovieProviders, getListMovieProvidersQueryKey } from "@workspace/api-client-react";
+import { useState } from "react";
+import {
+  useListMovieProviders,
+  getListMovieProvidersQueryKey,
+  getTmdbApiKey,
+  setTmdbApiKey,
+} from "@workspace/api-client-react";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -8,6 +14,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import {
@@ -38,6 +45,11 @@ export default function PlatformOnboarding() {
       },
     },
   );
+  const [apiKeyInput, setApiKeyInput] = useState<string>(() => getTmdbApiKey() ?? "");
+  const handleSaveApiKey = () => {
+    setTmdbApiKey(apiKeyInput.trim() || null);
+    void providers.refetch();
+  };
   const selectedCount = preferences.selectedProviders.length;
   const topInset = Platform.OS === "web" ? 67 : insets.top + 14;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom + 12;
@@ -109,6 +121,7 @@ export default function PlatformOnboarding() {
             </Text>
           </View>
         ) : providers.isError ? (
+          <>
           <CatalogNotice
             title="Piattaforme non disponibili"
             message={getCatalogErrorMessage(
@@ -117,6 +130,43 @@ export default function PlatformOnboarding() {
             )}
             onRetry={() => void providers.refetch()}
           />
+          <View style={[styles.statusPanel, { borderColor: colors.border }]}>
+            <Text style={[styles.statusText, { color: colors.mutedForeground }]}>
+              Chiave API TMDB (gratuita su themoviedb.org)
+            </Text>
+            <TextInput
+              value={apiKeyInput}
+              onChangeText={setApiKeyInput}
+              placeholder="Incolla qui la chiave API TMDB..."
+              placeholderTextColor={colors.mutedForeground}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={{
+                color: colors.foreground,
+                borderColor: colors.border,
+                borderWidth: 1,
+                borderRadius: 12,
+                paddingHorizontal: 12,
+                minHeight: 44,
+                alignSelf: "stretch",
+              }}
+            />
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleSaveApiKey}
+              style={{
+                backgroundColor: colors.primary,
+                borderRadius: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+              }}
+            >
+              <Text style={{ color: colors.primaryForeground, fontWeight: "700" }}>
+                Salva chiave e riprova
+              </Text>
+            </Pressable>
+          </View>
+          </>
         ) : (
           <View style={styles.providerGrid}>
             {providers.data?.results.map((provider) => {
