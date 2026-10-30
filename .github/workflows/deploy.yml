@@ -44,6 +44,10 @@ jobs:
         env:
           NODE_ENV: production
 
+      - name: Add PWA tags to index.html
+        run: |
+          sed -i 's|</head>|<link rel="manifest" href="/Film-Finder2/manifest.json"><meta name="theme-color" content="#111116"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Film Finder"><link rel="apple-touch-icon" href="/Film-Finder2/icon-192.png"></head>|' artifacts/film-finder/dist/index.html
+
       - name: Add 404.html for SPA routing
         run: cp artifacts/film-finder/dist/index.html artifacts/film-finder/dist/404.html
 
