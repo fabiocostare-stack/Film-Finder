@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -11,6 +11,7 @@ import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import {
   loadDirectorFilmography,
+  loadMoviesOnProviders,
   type DirectorProfile,
 } from "@workspace/api-client-react";
 import {
@@ -21,6 +22,14 @@ import { FilmCard } from "@/components/FilmCard";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useColors } from "@/hooks/useColors";
 import { useMovieCredits } from "@/hooks/useMovieCredits";
+
+type SortMode = "recent" | "oldest" | "rating";
+
+const SORT_OPTIONS: Array<{ mode: SortMode; label: string }> = [
+  { mode: "recent", label: "Più recenti" },
+  { mode: "oldest", label: "Più vecchi" },
+  { mode: "rating", label: "Voto" },
+];
 
 type DirectorDetailProps = {
   director: DirectorProfile;
@@ -45,7 +54,52 @@ export function DirectorDetail({ director, onBack }: DirectorDetailProps) {
     retry: false,
   });
 
-  const movies = filmography.data?.movies ?? [];
+  const [onlyAvailable, setOnlyAvailable] = useState(false);
+  const [sortMode, setSortMode] = useState<SortMode>("recent");
+
+  const allMovies = filmography.data?.movies ?? [];
+  const providerIds = useMemo(
+    () => preferences.selectedProviders.map((provider) => provider.id),
+    [preferences.selectedProviders],
+  );
+  const availability = useQuery({
+    queryKey: [
+      "director-availability",
+      directorId,
+      providerIds.join(","),
+      allMovies.length,
+    ],
+    queryFn: () =>
+      loadMoviesOnProviders(
+        allMovies.map((movie) => movie.id),
+        providerIds,
+      ),
+    enabled: onlyAvailable && allMovies.length > 0 && providerIds.length > 0,
+    staleTime: 6 * 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+
+  const movies = useMemo(() => {
+    let list = allMovies;
+    if (onlyAvailable) {
+      const ids = new Set(availability.data ?? []);
+      list = list.filter((movie) => ids.has(movie.id));
+    }
+    const sorted = [...list];
+    if (sortMode === "recent") {
+      sorted.sort((a, b) =>
+        (b.releaseDate || "0000").localeCompare(a.releaseDate || "0000"),
+      );
+    } else if (sortMode === "oldest") {
+      sorted.sort((a, b) =>
+        (a.releaseDate || "9999").localeCompare(b.releaseDate || "9999"),
+      );
+    } else {
+      sorted.sort((a, b) => b.voteAverage - a.voteAverage);
+    }
+    return sorted;
+  }, [allMovies, availability.data, onlyAvailable, sortMode]);
   const movieCredits = useMovieCredits(movies.map((movie) => movie.id));
   const watchedMovieIds = useMemo(
     () => new Set(preferences.watchedMovies.map((movie) => movie.id)),
@@ -106,7 +160,7 @@ export function DirectorDetail({ director, onBack }: DirectorDetailProps) {
           <Text style={[styles.name, { color: colors.foreground }]}>{name}</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
             {filmography.data
-              ? `${movies.length} ${movies.length === 1 ? "film diretto" : "film diretti"}`
+              ? `${allMovies.length} ${allMovies.length === 1 ? "film diretto" : "film diretti"}`
               : "Regista"}
           </Text>
           <Pressable
@@ -152,6 +206,67 @@ export function DirectorDetail({ director, onBack }: DirectorDetailProps) {
         l'icona della TV per vedere dove guardarli.
       </Text>
 
+      <View style={styles.controls}>
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: onlyAvailable }}
+          accessibilityLabel="Mostra solo i film disponibili sulle mie piattaforme"
+          onPress={() => setOnlyAvailable((value) => !value)}
+          style={({ pressed }) => [
+            styles.chip,
+            {
+              borderColor: onlyAvailable ? colors.primary : colors.border,
+              backgroundColor: onlyAvailable ? colors.accent : "transparent",
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}
+        >
+          <Feather
+            name={onlyAvailable ? "check-circle" : "circle"}
+            size={14}
+            color={onlyAvailable ? colors.primary : colors.mutedForeground}
+          />
+          <Text
+            style={[
+              styles.chipText,
+              { color: onlyAvailable ? colors.primary : colors.foreground },
+            ]}
+          >
+            Disponibili per me
+          </Text>
+        </Pressable>
+        <View style={styles.sortRow}>
+          {SORT_OPTIONS.map(({ mode, label }) => {
+            const active = sortMode === mode;
+            return (
+              <Pressable
+                key={mode}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                onPress={() => setSortMode(mode)}
+                style={({ pressed }) => [
+                  styles.chip,
+                  {
+                    borderColor: active ? colors.primary : colors.border,
+                    backgroundColor: active ? colors.accent : "transparent",
+                    opacity: pressed ? 0.7 : 1,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    { color: active ? colors.primary : colors.mutedForeground },
+                  ]}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
       {filmography.isLoading ? (
         <View style={[styles.statusPanel, { borderColor: colors.border }]}>
           <ActivityIndicator color={colors.primary} />
@@ -168,10 +283,25 @@ export function DirectorDetail({ director, onBack }: DirectorDetailProps) {
           )}
           onRetry={() => void filmography.refetch()}
         />
+      ) : onlyAvailable && availability.isLoading ? (
+        <View style={[styles.statusPanel, { borderColor: colors.border }]}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={[styles.statusText, { color: colors.mutedForeground }]}>
+            Controllo quali film sono sui tuoi servizi…
+          </Text>
+        </View>
+      ) : onlyAvailable && availability.isError ? (
+        <CatalogNotice
+          title="Disponibilità non verificabile"
+          message="Non è stato possibile controllare le piattaforme. Riprova tra poco."
+          onRetry={() => void availability.refetch()}
+        />
       ) : movies.length === 0 ? (
         <View style={[styles.statusPanel, { borderColor: colors.border }]}>
           <Text style={[styles.statusText, { color: colors.mutedForeground }]}>
-            Non risultano film diretti da questo regista.
+            {onlyAvailable
+              ? "Nessun film di questo regista è sui tuoi servizi. Disattiva il filtro per vederli tutti."
+              : "Non risultano film diretti da questo regista."}
           </Text>
         </View>
       ) : (
@@ -228,6 +358,19 @@ const styles = StyleSheet.create({
   },
   followText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   hint: { fontSize: 11, lineHeight: 16 },
+  controls: { gap: 10 },
+  sortRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: {
+    alignSelf: "flex-start",
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderRadius: 10,
+  },
+  chipText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   movieList: { gap: 12 },
   statusPanel: {
     borderWidth: 1,
