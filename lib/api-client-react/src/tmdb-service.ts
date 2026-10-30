@@ -799,6 +799,50 @@ async function loadDirectorPicks(
   return picks;
 }
 
+export type DirectorFilmography = {
+  director: DirectorProfile;
+  movies: Movie[];
+};
+
+export async function loadDirectorFilmography(
+  directorId: number,
+): Promise<DirectorFilmography> {
+  const [person, credits] = await Promise.all([
+    getTmdb<TmdbPersonDetails>(
+      `/person/${directorId}`,
+      { language: "it-IT" },
+      12 * 60 * 60 * 1000,
+    ),
+    getTmdb<TmdbPersonMovieCredits>(
+      `/person/${directorId}/movie_credits`,
+      { language: "it-IT" },
+      12 * 60 * 60 * 1000,
+    ),
+  ]);
+  const unique = new Map<number, TmdbMovie>();
+  for (const movie of credits.crew ?? []) {
+    if (movie.job === "Director" && movie.title?.trim()) {
+      unique.set(movie.id, movie);
+    }
+  }
+  const movies = [...unique.values()]
+    .sort((a, b) => {
+      const dateA = a.release_date || "0000";
+      const dateB = b.release_date || "0000";
+      return dateB.localeCompare(dateA);
+    })
+    .slice(0, 80)
+    .map(mapMovie);
+  return {
+    director: {
+      id: directorId,
+      name: person.name?.trim() || "Regista",
+      profilePath: person.profile_path ?? null,
+    },
+    movies,
+  };
+}
+
 export async function loadMovieCredits(
   movieId: number,
 ): Promise<MovieCreditsResponse> {
