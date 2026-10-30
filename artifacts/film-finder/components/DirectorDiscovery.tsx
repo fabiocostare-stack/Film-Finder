@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import {
   getGetDirectorDiscoveriesQueryKey,
   useGetDirectorDiscoveries,
@@ -27,6 +28,7 @@ const DIRECTOR_STALE_TIME = 30 * 60 * 1000;
 
 export function DirectorDiscovery() {
   const colors = useColors();
+  const router = useRouter();
   const [rotation, setRotation] = useState(0);
   const {
     preferences,
@@ -99,6 +101,17 @@ export function DirectorDiscovery() {
     [preferences.followedDirectors],
   );
 
+  const openDirector = (director: DirectorRecommendation["director"]) => {
+    router.push({
+      pathname: "/director/[id]",
+      params: {
+        id: String(director.id),
+        name: director.name,
+        profilePath: director.profilePath ?? "",
+      },
+    });
+  };
+
   const renderDirector = (item: DirectorRecommendation) => {
     const isFollowing = followedDirectorIds.has(item.director.id);
     const profileUri = item.director.profilePath
@@ -122,6 +135,15 @@ export function DirectorDiscovery() {
         ]}
       >
         <View style={styles.directorHeader}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Apri la pagina di ${item.director.name}`}
+            onPress={() => openDirector(item.director)}
+            style={({ pressed }) => [
+              { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 },
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
           {profileUri ? (
             <Image
               source={{ uri: profileUri }}
@@ -153,6 +175,7 @@ export function DirectorDiscovery() {
               {sourceLabel}
             </Text>
           </View>
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={
