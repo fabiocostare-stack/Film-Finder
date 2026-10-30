@@ -41,7 +41,6 @@ export function DirectorDetail({ director, onBack }: DirectorDetailProps) {
   const directorId = director.id;
   const {
     preferences,
-    toggleFollowedDirector,
     toggleWatchedMovie,
     toggleSavedMovie,
   } = usePreferences();
@@ -116,9 +115,6 @@ export function DirectorDetail({ director, onBack }: DirectorDetailProps) {
   const profileUri = profilePath
     ? `https://image.tmdb.org/t/p/w185${profilePath}`
     : null;
-  const isFollowing = preferences.followedDirectors.some(
-    (director) => director.id === directorId,
-  );
 
   return (
     <View style={styles.content}>
@@ -163,41 +159,6 @@ export function DirectorDetail({ director, onBack }: DirectorDetailProps) {
               ? `${allMovies.length} ${allMovies.length === 1 ? "film diretto" : "film diretti"}`
               : "Regista"}
           </Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={
-              isFollowing ? `Smetti di seguire ${name}` : `Segui ${name}`
-            }
-            onPress={() =>
-              toggleFollowedDirector({
-                id: directorId,
-                name,
-                profilePath,
-              })
-            }
-            style={({ pressed }) => [
-              styles.followButton,
-              {
-                borderColor: isFollowing ? colors.primary : colors.border,
-                backgroundColor: isFollowing ? colors.accent : "transparent",
-                opacity: pressed ? 0.7 : 1,
-              },
-            ]}
-          >
-            <Feather
-              name={isFollowing ? "check" : "plus"}
-              size={14}
-              color={isFollowing ? colors.primary : colors.foreground}
-            />
-            <Text
-              style={[
-                styles.followText,
-                { color: isFollowing ? colors.primary : colors.foreground },
-              ]}
-            >
-              {isFollowing ? "Seguito" : "Segui"}
-            </Text>
-          </Pressable>
         </View>
       </View>
 
@@ -346,17 +307,6 @@ const styles = StyleSheet.create({
   headerCopy: { flex: 1, gap: 6 },
   name: { fontSize: 22, lineHeight: 27, fontFamily: "Inter_700Bold" },
   subtitle: { fontSize: 12 },
-  followButton: {
-    alignSelf: "flex-start",
-    minHeight: 34,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderRadius: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  followText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   hint: { fontSize: 11, lineHeight: 16 },
   controls: { gap: 10 },
   sortRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
