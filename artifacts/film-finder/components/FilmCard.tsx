@@ -190,10 +190,7 @@ export function FilmCard({
               { backgroundColor: colors.accent, opacity: pressed ? 0.7 : 1 },
             ]}
           >
-            <Feather name="tv" size={13} color={colors.primary} />
-            <Text style={[styles.actionLabel, { color: colors.foreground }]}>
-              Dove vederlo
-            </Text>
+            <Feather name="tv" size={18} color={colors.primary} />
           </Pressable>
           <Pressable
             testID={`watched-${movie.id}`}
@@ -216,17 +213,9 @@ export function FilmCard({
           >
             <Feather
               name={isWatched ? "check-circle" : "eye"}
-              size={13}
+              size={18}
               color={isWatched ? colors.primary : colors.mutedForeground}
             />
-            <Text
-              style={[
-                styles.actionLabel,
-                { color: isWatched ? colors.primary : colors.mutedForeground },
-              ]}
-            >
-              Già visto
-            </Text>
           </Pressable>
           <View style={styles.iconActions}>
             <Pressable
@@ -251,17 +240,9 @@ export function FilmCard({
             >
               <Feather
                 name="bookmark"
-                size={17}
+                size={18}
                 color={isSaved ? colors.primary : colors.mutedForeground}
               />
-              <Text
-                style={[
-                  styles.actionLabel,
-                  { color: isSaved ? colors.primary : colors.mutedForeground },
-                ]}
-              >
-                {isSaved ? "In lista" : "Da vedere"}
-              </Text>
             </Pressable>
             {onDismiss ? (
               <Pressable
@@ -389,22 +370,23 @@ const styles = StyleSheet.create({
     marginTop: "auto",
     paddingTop: 8,
     flexDirection: "row",
-    flexWrap: "wrap",
     alignItems: "center",
-    justifyContent: "flex-start",
+    justifyContent: "space-between",
     gap: 6,
   },
   availabilityAction: {
-    minHeight: 36,
-    paddingHorizontal: 8,
+    width: 40,
+    height: 36,
+    justifyContent: "center",
     borderRadius: 10,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
   },
   watchedAction: {
-    minHeight: 36,
-    paddingHorizontal: 6,
+    width: 40,
+    height: 36,
+    justifyContent: "center",
     borderWidth: 1,
     borderRadius: 10,
     flexDirection: "row",
@@ -412,8 +394,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   saveAction: {
-    minHeight: 40,
-    paddingHorizontal: 12,
+    width: 40,
+    height: 36,
     borderWidth: 1,
     borderRadius: 10,
     flexDirection: "row",
