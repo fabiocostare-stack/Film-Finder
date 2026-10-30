@@ -8,13 +8,14 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import {
   getGetDirectorDiscoveriesQueryKey,
   useGetDirectorDiscoveries,
+  type DirectorProfile,
   type DirectorRecommendation,
   type GetDirectorDiscoveriesParams,
 } from "@workspace/api-client-react";
+import { DirectorDetail } from "@/components/DirectorDetail";
 import { FilmCard } from "@/components/FilmCard";
 import {
   CatalogNotice,
@@ -28,7 +29,8 @@ const DIRECTOR_STALE_TIME = 30 * 60 * 1000;
 
 export function DirectorDiscovery() {
   const colors = useColors();
-  const router = useRouter();
+  const [selectedDirector, setSelectedDirector] =
+    useState<DirectorProfile | null>(null);
   const [rotation, setRotation] = useState(0);
   const {
     preferences,
@@ -102,14 +104,7 @@ export function DirectorDiscovery() {
   );
 
   const openDirector = (director: DirectorRecommendation["director"]) => {
-    router.push({
-      pathname: "/director/[id]",
-      params: {
-        id: String(director.id),
-        name: director.name,
-        profilePath: director.profilePath ?? "",
-      },
-    });
+    setSelectedDirector(director);
   };
 
   const renderDirector = (item: DirectorRecommendation) => {
@@ -248,6 +243,15 @@ export function DirectorDiscovery() {
       </View>
     );
   };
+
+  if (selectedDirector) {
+    return (
+      <DirectorDetail
+        director={selectedDirector}
+        onBack={() => setSelectedDirector(null)}
+      />
+    );
+  }
 
   if (!isReady || discoveries.isLoading) {
     return (
