@@ -505,6 +505,43 @@ async function getPersonDiscoverCandidates(
   return [...candidates.values()];
 }
 
+async function filterMoviesOnSelectedProviders<T extends { movie: Movie }>(
+  items: T[],
+  region: string,
+  selectedProviderIds: number[],
+  limit: number,
+): Promise<T[]> {
+  const providerIds = new Set(selectedProviderIds);
+  const verified: T[] = [];
+  for (
+    let offset = 0;
+    offset < items.length && verified.length < limit;
+    offset += 6
+  ) {
+    const batch = items.slice(offset, offset + 6);
+    const responses = await Promise.allSettled(
+      batch.map((item) =>
+        getTmdb<TmdbAvailability>(
+          `/movie/${item.movie.id}/watch/providers`,
+          {},
+          6 * 60 * 60 * 1000,
+        ),
+      ),
+    );
+    responses.forEach((response, index) => {
+      if (response.status !== "fulfilled") return;
+      const availability = response.value.results?.[region];
+      const onSelected = [
+        ...(availability?.flatrate ?? []),
+        ...(availability?.free ?? []),
+        ...(availability?.ads ?? []),
+      ].some((provider) => providerIds.has(provider.provider_id));
+      if (onSelected) verified.push(batch[index]);
+    });
+  }
+  return verified.slice(0, limit);
+}
+
 async function getAvailableSimilarMovies(
   candidates: SimilarMovie[],
   region: string,
@@ -1037,8 +1074,17 @@ export async function handleClientApiRequest(
         b.voteCount - a.voteCount,
     );
 
+    // Doppio controllo: TMDB discover a volte include film non realmente
+    // disponibili sulle piattaforme scelte, quindi verifichiamo ogni film.
+    const verifiedMovies = await filterMoviesOnSelectedProviders(
+      rankedMovies,
+      region,
+      providers,
+      20,
+    );
+
     const response: MovieSearchResponse = {
-      results: rankedMovies.slice(0, 20).map((item) => item.movie),
+      results: verifiedMovies.map((item) => item.movie),
       page: pageNumber,
       totalPages,
       totalResults,
