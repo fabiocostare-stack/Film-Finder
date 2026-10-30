@@ -35,7 +35,6 @@ export function DirectorDiscovery() {
   const {
     preferences,
     isReady,
-    toggleFollowedDirector,
     toggleWatchedMovie,
     toggleSavedMovie,
   } = usePreferences();
@@ -51,17 +50,12 @@ export function DirectorDiscovery() {
           .slice(0, 200)
           .map((movie) => movie.id)
           .join(",") || undefined,
-      followedDirectorIds:
-        preferences.followedDirectors
-          .map((director) => director.id)
-          .join(",") || undefined,
       excludeMovieIds:
         preferences.dismissedMovieIds.slice(-200).join(",") || undefined,
     }),
     [
       rotation,
       preferences.dismissedMovieIds,
-      preferences.followedDirectors,
       preferences.selectedProviders,
       preferences.watchedMovies,
     ],
@@ -98,17 +92,12 @@ export function DirectorDiscovery() {
     () => new Set(preferences.savedMovies.map((movie) => movie.id)),
     [preferences.savedMovies],
   );
-  const followedDirectorIds = useMemo(
-    () => new Set(preferences.followedDirectors.map((director) => director.id)),
-    [preferences.followedDirectors],
-  );
 
   const openDirector = (director: DirectorRecommendation["director"]) => {
     setSelectedDirector(director);
   };
 
   const renderDirector = (item: DirectorRecommendation) => {
-    const isFollowing = followedDirectorIds.has(item.director.id);
     const profileUri = item.director.profilePath
       ? `https://image.tmdb.org/t/p/w185${item.director.profilePath}`
       : null;
@@ -170,37 +159,6 @@ export function DirectorDiscovery() {
               {sourceLabel}
             </Text>
           </View>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={
-              isFollowing
-                ? `Smetti di seguire ${item.director.name}`
-                : `Segui ${item.director.name}`
-            }
-            onPress={() => toggleFollowedDirector(item.director)}
-            style={({ pressed }) => [
-              styles.followButton,
-              {
-                borderColor: isFollowing ? colors.primary : colors.border,
-                backgroundColor: isFollowing ? colors.accent : "transparent",
-                opacity: pressed ? 0.7 : 1,
-              },
-            ]}
-          >
-            <Feather
-              name={isFollowing ? "check" : "plus"}
-              size={14}
-              color={isFollowing ? colors.primary : colors.foreground}
-            />
-            <Text
-              style={[
-                styles.followButtonText,
-                { color: isFollowing ? colors.primary : colors.foreground },
-              ]}
-            >
-              {isFollowing ? "Seguito" : "Segui"}
-            </Text>
           </Pressable>
         </View>
 
@@ -287,7 +245,7 @@ export function DirectorDiscovery() {
           <Text
             style={[styles.sectionSubtitle, { color: colors.mutedForeground }]}
           >
-            Dai film visti, dai registi seguiti e da quelli affini
+            Dai film che hai visto e dai registi affini
           </Text>
         </View>
         <Pressable
@@ -327,8 +285,8 @@ export function DirectorDiscovery() {
             Costruiamo i tuoi gusti da qui
           </Text>
           <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
-            Segui un regista o segna come visti alcuni film: useremo quelle
-            informazioni senza presumere che ogni film visto ti sia piaciuto.
+            Segna come visti alcuni film: useremo questa informazione senza
+            presumere che ogni film visto ti sia piaciuto.
           </Text>
         </View>
       )}
@@ -398,17 +356,6 @@ const styles = StyleSheet.create({
   directorCopy: { flex: 1, gap: 5 },
   directorName: { fontSize: 15, lineHeight: 20, fontFamily: "Inter_700Bold" },
   sourceText: { fontSize: 11, lineHeight: 15 },
-  followButton: {
-    minHeight: 36,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    paddingHorizontal: 9,
-    borderWidth: 1,
-    borderRadius: 12,
-  },
-  followButtonText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   movieList: { gap: 11 },
   noMovies: { borderWidth: 1, borderRadius: 13, padding: 12 },
   noMoviesText: { fontSize: 12, lineHeight: 18 },
