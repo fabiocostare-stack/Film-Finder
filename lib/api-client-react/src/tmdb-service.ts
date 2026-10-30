@@ -843,6 +843,38 @@ export async function loadDirectorFilmography(
   };
 }
 
+export async function loadMoviesOnProviders(
+  movieIds: number[],
+  providerIds: number[],
+  region = "IT",
+): Promise<number[]> {
+  const wanted = new Set(providerIds);
+  const available: number[] = [];
+  for (let offset = 0; offset < movieIds.length; offset += 6) {
+    const batch = movieIds.slice(offset, offset + 6);
+    const responses = await Promise.allSettled(
+      batch.map((movieId) =>
+        getTmdb<TmdbAvailability>(
+          `/movie/${movieId}/watch/providers`,
+          {},
+          6 * 60 * 60 * 1000,
+        ),
+      ),
+    );
+    responses.forEach((response, index) => {
+      if (response.status !== "fulfilled") return;
+      const info = response.value.results?.[region];
+      const onSelected = [
+        ...(info?.flatrate ?? []),
+        ...(info?.free ?? []),
+        ...(info?.ads ?? []),
+      ].some((provider) => wanted.has(provider.provider_id));
+      if (onSelected) available.push(batch[index]);
+    });
+  }
+  return available;
+}
+
 export async function loadMovieCredits(
   movieId: number,
 ): Promise<MovieCreditsResponse> {
